@@ -1,7 +1,6 @@
 ﻿import { Router } from 'express'
 import { authMiddleware, adminMiddleware } from '../middleware/auth.js'
 import { prisma } from '../lib/prisma.js'
-import { PropertyStatus, VehicleStatus } from '@prisma/client'
 import { createAndBroadcastNotification } from '../utils/notifications.js'
 import { resolveSystemAdmin } from '../utils/admin-contact.js'
 import { hashPassword } from '../utils/password.js'
@@ -61,7 +60,9 @@ function flattenAgent(user: any) {
     tinNumber: professionalInfo.tinNumber || '',
   }
 }
+
 const router = Router()
+
 router.get('/agents', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const where: any = { role: { in: ['agent', 'owner'] } }
@@ -86,7 +87,7 @@ router.get('/agents', authMiddleware, adminMiddleware, async (req, res) => {
     ])
     res.json({ agents: agents.map(flattenAgent), pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) } })
   } catch (err: any) {
-    res.status(500).json({ message: err.message || 'Failed to fetch agents' })
+    res.status(500).json({ message: err.message || 'Failed to fetch sellers' })
   }
 })
 
@@ -100,7 +101,7 @@ router.post('/agents', authMiddleware, adminMiddleware, async (req, res) => {
 
     const user = await prisma.user.findUnique({ where: { id } })
     if (!user) {
-      return res.status(404).json({ message: 'Agent not found' })
+      return res.status(404).json({ message: 'Seller not found' })
     }
 
     if (user.isRootAdmin) {
@@ -113,7 +114,7 @@ router.post('/agents', authMiddleware, adminMiddleware, async (req, res) => {
         createAndBroadcastNotification(
           id,
           'Account Approved',
-          'Your agent account has been approved. You can now post properties and vehicles.',
+          'Your seller account has been approved. You can now post products.',
           'success'
         ).catch(() => {})
         break
@@ -122,7 +123,7 @@ router.post('/agents', authMiddleware, adminMiddleware, async (req, res) => {
         createAndBroadcastNotification(
           id,
           'Account Rejected',
-          `Your agent account has been rejected. Reason: ${rejectionReason || 'No reason provided'}`,
+          `Your seller account has been rejected. Reason: ${rejectionReason || 'No reason provided'}`,
           'error'
         ).catch(() => {})
         break
@@ -131,7 +132,7 @@ router.post('/agents', authMiddleware, adminMiddleware, async (req, res) => {
         createAndBroadcastNotification(
           id,
           'Account Suspended',
-          'Your agent account has been suspended. Please contact support for more information.',
+          'Your seller account has been suspended. Please contact support for more information.',
           'warning'
         ).catch(() => {})
         break
@@ -140,98 +141,63 @@ router.post('/agents', authMiddleware, adminMiddleware, async (req, res) => {
         createAndBroadcastNotification(
           id,
           'Account Reactivated',
-          'Your agent account has been reactivated. You can now post properties and vehicles.',
+          'Your seller account has been reactivated. You can now post products.',
           'success'
         ).catch(() => {})
         break
       case 'delete':
         await deleteUserCascade(id, req.user!.userId)
-        return res.json({ message: 'Agent deleted' })
+        return res.json({ message: 'Seller deleted' })
       default:
         return res.status(400).json({ message: `Unknown action: ${action}` })
     }
 
-    res.json({ message: 'Agent status updated successfully' })
+    res.json({ message: 'Seller status updated successfully' })
   } catch (err: any) {
     res.status(500).json({ message: err.message || 'Failed to process action' })
   }
 })
 
-
-
-
-
-
-
-
-
 async function deleteUserCascade(userId: string, actingAdminId: string) {
   const user = await prisma.user.findUnique({ where: { id: userId } })
   if (!user) throw new Error('User not found')
 
-  const properties = await prisma.property.findMany({
-    where: { agentId: userId },
-    select: { id: true, status: true },
-  })
-  const vehicles = await prisma.vehicle.findMany({
-    where: { agentId: userId },
+  const products = await prisma.product.findMany({
+    where: { sellerId: userId },
     select: { id: true, status: true },
   })
 
-  const POSTED = ['Approved', 'Sold', 'Rented']
+  const POSTED = ['Approved', 'OutOfStock']
+  const postedProductIds = products.filter((p) => POSTED.includes(p.status)).map((p) => p.id)
+  const deleteProductIds = products.filter((p) => !POSTED.includes(p.status)).map((p) => p.id)
 
-  const postedPropertyIds = properties.filter((p) => POSTED.includes(p.status)).map((p) => p.id)
-  const deletePropertyIds = properties.filter((p) => !POSTED.includes(p.status)).map((p) => p.id)
-  const postedVehicleIds = vehicles.filter((v) => POSTED.includes(v.status)).map((v) => v.id)
-  const deleteVehicleIds = vehicles.filter((v) => !POSTED.includes(v.status)).map((v) => v.id)
-
-  
-  if (postedPropertyIds.length > 0) {
+  if (postedProductIds.length > 0) {
     const admin = await resolveAdminContact(actingAdminId)
-    await prisma.property.updateMany({
-      where: { id: { in: postedPropertyIds } },
+    await prisma.product.updateMany({
+      where: { id: { in: postedProductIds } },
       data: {
-        agentId: actingAdminId,
-        agentName: admin.name,
+        sellerId: actingAdminId,
+        sellerName: admin.name,
         displayPhone: admin.phone,
-        displayPhoto: admin.photo || null,
         contactMode: 'Admin',
         contactUserId: admin.id ?? actingAdminId,
       },
     })
   }
-  if (postedVehicleIds.length > 0) {
-    const admin = await resolveAdminContact(actingAdminId)
-    await prisma.vehicle.updateMany({
-      where: { id: { in: postedVehicleIds } },
-      data: {
-        agentId: actingAdminId,
-        agentName: admin.name,
-        displayPhone: admin.phone,
-        displayPhoto: admin.photo || null,
-        contactUserId: admin.id ?? actingAdminId,
-      },
-    })
-  }
 
-  
-  if (deletePropertyIds.length > 0) {
-    await prisma.property.deleteMany({ where: { id: { in: deletePropertyIds } } })
-  }
-  if (deleteVehicleIds.length > 0) {
-    await prisma.vehicle.deleteMany({ where: { id: { in: deleteVehicleIds } } })
+  if (deleteProductIds.length > 0) {
+    await prisma.product.deleteMany({ where: { id: { in: deleteProductIds } } })
   }
 
   const messageOr: any[] = [{ senderId: userId }, { recipientId: userId }]
-  if (deletePropertyIds.length > 0) {
-    messageOr.push({ propertyId: { in: deletePropertyIds } })
+  if (deleteProductIds.length > 0) {
+    messageOr.push({ productId: { in: deleteProductIds } })
   }
   await prisma.message.deleteMany({ where: { OR: messageOr } })
   await prisma.savedItem.deleteMany({ where: { userId } })
   await prisma.notification.deleteMany({ where: { userId } })
+  await prisma.worker.deleteMany({ where: { userId } })
 
-  
-  
   if (user.firebaseUid) {
     try {
       await getAuth(initializeFirebaseAdmin()).deleteUser(user.firebaseUid)
@@ -243,323 +209,213 @@ async function deleteUserCascade(userId: string, actingAdminId: string) {
   await prisma.user.delete({ where: { id: userId } })
 }
 
-
-
 async function resolveAdminContact(_userId: string) {
   return resolveSystemAdmin()
 }
 
 
-
-
-router.patch('/properties/:id/contact', authMiddleware, adminMiddleware, async (req, res) => {
+router.patch('/products/:id/contact', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const property = await prisma.property.findUnique({
+    const product = await prisma.product.findUnique({
       where: { id: req.params.id },
-      include: { agent: { select: { id: true, username: true, phone: true, profilePhoto: true } } },
+      include: { seller: { select: { id: true, username: true, phone: true, profilePhoto: true } } },
     })
-    if (!property) {
-      return res.status(404).json({ message: 'Property not found' })
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' })
     }
 
     const admin = await resolveAdminContact(req.user!.userId)
-    const agent = property.agent
+    const seller = product.seller
 
     const showingAdmin =
-      (property.agentName?.trim() || '') === admin.name &&
-      (property.displayPhone?.trim() || '') === admin.phone &&
-      (property.displayPhoto?.trim() || '') === admin.photo
+      (product.sellerName?.trim() || '') === admin.name &&
+      (product.displayPhone?.trim() || '') === admin.phone
 
     const nextAdmin = !showingAdmin
-    await prisma.property.update({
+    await prisma.product.update({
       where: { id: req.params.id },
       data: {
-        agentName: nextAdmin ? admin.name : agent?.username?.trim() || admin.name,
-        displayPhone: nextAdmin ? admin.phone : agent?.phone?.trim() || admin.phone,
-        displayPhoto: nextAdmin ? admin.photo : agent?.profilePhoto?.trim() || '',
+        sellerName: nextAdmin ? admin.name : seller?.username?.trim() || admin.name,
+        displayPhone: nextAdmin ? admin.phone : seller?.phone?.trim() || admin.phone,
         contactMode: nextAdmin ? 'Admin' : 'Owner',
-        contactUserId: nextAdmin ? admin.id ?? req.user!.userId : agent?.id || null,
+        contactUserId: nextAdmin ? admin.id ?? req.user!.userId : seller?.id || null,
       },
     })
-    const updated = await prisma.property.findUnique({
+    const updated = await prisma.product.findUnique({
       where: { id: req.params.id },
-      select: { agentName: true, displayPhone: true, displayPhoto: true, contactMode: true },
+      select: { sellerName: true, displayPhone: true, contactMode: true },
     })
 
-    res.json({ message: 'Contact updated', contact: nextAdmin ? 'admin' : 'agent', ...updated })
-  } catch (err: any) {
-    res.status(500).json({ message: err.message || 'Failed to update contact' })
-  }
-})
-
-router.patch('/vehicles/:id/contact', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    const vehicle = await prisma.vehicle.findUnique({
-      where: { id: req.params.id },
-      include: { agent: { select: { id: true, username: true, phone: true, profilePhoto: true } } },
-    })
-    if (!vehicle) {
-      return res.status(404).json({ message: 'Vehicle not found' })
-    }
-
-    const admin = await resolveAdminContact(req.user!.userId)
-    const agent = vehicle.agent
-
-    const showingAdmin =
-      (vehicle.agentName?.trim() || '') === admin.name &&
-      (vehicle.displayPhone?.trim() || '') === admin.phone &&
-      (vehicle.displayPhoto?.trim() || '') === admin.photo
-
-    const nextAdmin = !showingAdmin
-    await prisma.vehicle.update({
-      where: { id: req.params.id },
-      data: {
-        agentName: nextAdmin ? admin.name : agent?.username?.trim() || admin.name,
-        displayPhone: nextAdmin ? admin.phone : agent?.phone?.trim() || admin.phone,
-        displayPhoto: nextAdmin ? admin.photo : agent?.profilePhoto?.trim() || '',
-        contactUserId: nextAdmin ? admin.id ?? req.user!.userId : agent?.id || null,
-      },
-    })
-    const updated = await prisma.vehicle.findUnique({
-      where: { id: req.params.id },
-      select: { agentName: true, displayPhone: true, displayPhoto: true },
-    })
-
-    res.json({ message: 'Contact updated', contact: nextAdmin ? 'admin' : 'agent', ...updated })
+    res.json({ message: 'Contact updated', contact: nextAdmin ? 'admin' : 'seller', ...updated })
   } catch (err: any) {
     res.status(500).json({ message: err.message || 'Failed to update contact' })
   }
 })
 
 
-router.get('/properties', authMiddleware, adminMiddleware, async (req, res) => {
+router.get('/products', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const where: any = {}
     if (req.query.status && req.query.status !== 'all' && req.query.status !== '') {
       where.status = req.query.status
     }
     if (req.query.search) {
-      where.title = { contains: String(req.query.search), mode: 'insensitive' }
+      where.name = { contains: String(req.query.search), mode: 'insensitive' }
     }
     const page = Math.max(1, parseInt(req.query.page as string) || 1)
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 100))
-    const [total, properties] = await Promise.all([
-      prisma.property.count({ where }),
-      prisma.property.findMany({
+    const [total, products] = await Promise.all([
+      prisma.product.count({ where }),
+      prisma.product.findMany({
         where,
-        include: { agent: { select: { id: true, username: true, email: true, phone: true, profilePhoto: true, role: true } } },
+        include: {
+          seller: { select: { id: true, username: true, email: true, phone: true, profilePhoto: true, role: true } },
+          category: { select: { id: true, name: true, slug: true } },
+          brand: { select: { id: true, name: true } },
+          _count: { select: { variants: true } },
+        },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
       }),
     ])
-    res.json({ properties, pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) } })
+    res.json({ products, pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) } })
   } catch (err: any) {
-    res.status(500).json({ message: err.message || 'Failed to fetch properties' })
+    res.status(500).json({ message: err.message || 'Failed to fetch products' })
   }
 })
 
-
-router.patch('/properties/:id/approve', authMiddleware, adminMiddleware, async (req, res) => {
+router.patch('/products/:id/approve', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const property = await prisma.property.findUnique({
-      where: { id: req.params.id },
-      include: { agent: { select: { id: true, username: true, email: true, phone: true, profilePhoto: true } } },
-    })
-    if (!property) {
-      return res.status(404).json({ message: 'Property not found' })
+    const product = await prisma.product.findUnique({ where: { id: req.params.id } })
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' })
     }
-    const updated = await prisma.property.update({
+    const updated = await prisma.product.update({
       where: { id: req.params.id },
       data: { status: 'Approved', rejectionReason: null },
     })
     createAndBroadcastNotification(
-      property.agentId,
-      'Property Approved',
-      `Your property "${property.title}" has been approved and is now live.`,
+      product.sellerId,
+      'Product Approved',
+      `Your product "${product.name}" has been approved and is now live.`,
       'success',
-      { type: 'property', id: property.id }
+      { type: 'product', id: product.id }
     ).catch(() => {})
-    res.json({ message: 'Property approved', property: updated })
+    res.json({ message: 'Product approved', product: updated })
   } catch (err: any) {
-    res.status(500).json({ message: err.message || 'Failed to approve property' })
+    res.status(500).json({ message: err.message || 'Failed to approve product' })
   }
 })
 
-
-router.patch('/properties/:id/reject', authMiddleware, adminMiddleware, async (req, res) => {
+router.patch('/products/:id/reject', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const property = await prisma.property.findUnique({
-      where: { id: req.params.id },
-      include: { agent: { select: { id: true, username: true, email: true, phone: true, profilePhoto: true } } },
-    })
-    if (!property) {
-      return res.status(404).json({ message: 'Property not found' })
+    const product = await prisma.product.findUnique({ where: { id: req.params.id } })
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' })
     }
     const reason = (req.body?.reason as string) || (req.body?.rejectionReason as string) || 'No reason provided'
-    const updated = await prisma.property.update({
+    const updated = await prisma.product.update({
       where: { id: req.params.id },
       data: { status: 'Rejected', rejectionReason: reason },
     })
     createAndBroadcastNotification(
-      property.agentId,
-      'Property Rejected',
-      `Your property "${property.title}" was rejected. Reason: ${reason}`,
+      product.sellerId,
+      'Product Rejected',
+      `Your product "${product.name}" was rejected. Reason: ${reason}`,
       'error',
-      { type: 'property', id: property.id }
+      { type: 'product', id: product.id }
     ).catch(() => {})
-    res.json({ message: 'Property rejected', property: updated })
+    res.json({ message: 'Product rejected', product: updated })
   } catch (err: any) {
-    res.status(500).json({ message: err.message || 'Failed to reject property' })
+    res.status(500).json({ message: err.message || 'Failed to reject product' })
   }
 })
 
-
-router.patch('/properties/:id/status', authMiddleware, adminMiddleware, async (req, res) => {
+router.patch('/products/:id/status', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const status = req.body?.status as string
-    const allowed = ['Approved', 'Sold', 'Rented']
+    const allowed = ['Approved', 'OutOfStock', 'Archived']
     if (!allowed.includes(status)) {
-      return res.status(400).json({ message: 'Invalid status. Allowed: Approved, Sold, Rented.' })
+      return res.status(400).json({ message: 'Invalid status. Allowed: Approved, OutOfStock, Archived.' })
     }
-    const property = await prisma.property.findUnique({
+    const product = await prisma.product.findUnique({ where: { id: req.params.id } })
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' })
+    }
+    if (product.status === status) {
+      return res.json({ message: 'Product status unchanged', product: { ...product, status } })
+    }
+    const updated = await prisma.product.update({
       where: { id: req.params.id },
-      include: { agent: { select: { id: true, username: true, email: true, phone: true, profilePhoto: true } } },
+      data: { status: status as any, rejectionReason: status === 'Approved' ? null : product.rejectionReason },
     })
-    if (!property) {
-      return res.status(404).json({ message: 'Property not found' })
-    }
-    if (property.status === status) {
-      return res.json({ message: 'Property status unchanged', property: { ...property, status } })
-    }
-    const updated = await prisma.property.update({
-      where: { id: req.params.id },
-      data: { status: status as PropertyStatus, rejectionReason: status === 'Rejected' ? property.rejectionReason : null },
-    })
-    const actionLabel = status === 'Sold' ? 'sold' : status === 'Rented' ? 'rented' : 'back on the market'
     createAndBroadcastNotification(
-      property.agentId,
-      'Property Status Updated',
-      `Your property "${property.title}" was marked as ${actionLabel}.`,
+      product.sellerId,
+      'Product Status Updated',
+      `Your product "${product.name}" is now ${status.replace(/([A-Z])/g, ' $1').trim()}.`,
       status === 'Approved' ? 'success' : 'info',
-      { type: 'property', id: property.id }
+      { type: 'product', id: product.id }
     ).catch(() => {})
-    res.json({ message: `Property marked as ${actionLabel}`, property: updated })
+    res.json({ message: 'Product status updated', product: updated })
   } catch (err: any) {
-    res.status(500).json({ message: err.message || 'Failed to update property status' })
+    res.status(500).json({ message: err.message || 'Failed to update product status' })
   }
 })
 
 
-router.get('/vehicles', authMiddleware, adminMiddleware, async (req, res) => {
+router.get('/orders', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const where: any = {}
     if (req.query.status && req.query.status !== 'all' && req.query.status !== '') {
       where.status = req.query.status
     }
-    if (req.query.search) {
-      where.title = { contains: String(req.query.search), mode: 'insensitive' }
+    if (req.query.type && req.query.type !== 'all') {
+      where.type = req.query.type
     }
     const page = Math.max(1, parseInt(req.query.page as string) || 1)
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 100))
-    const [total, vehicles] = await Promise.all([
-      prisma.vehicle.count({ where }),
-      prisma.vehicle.findMany({
+    const [total, orders] = await Promise.all([
+      prisma.order.count({ where }),
+      prisma.order.findMany({
         where,
-        include: { agent: { select: { id: true, username: true, email: true, phone: true, profilePhoto: true, role: true } } },
+        include: {
+          customer: { select: { id: true, username: true, email: true, phone: true } },
+          seller: { select: { id: true, username: true, email: true, phone: true } },
+          items: { include: { product: { select: { id: true, name: true } } } },
+        },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
       }),
     ])
-    res.json({ vehicles, pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) } })
+    res.json({ orders, pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) } })
   } catch (err: any) {
-    res.status(500).json({ message: err.message || 'Failed to fetch vehicles' })
+    res.status(500).json({ message: err.message || 'Failed to fetch orders' })
   }
 })
 
-
-router.patch('/vehicles/:id/approve', authMiddleware, adminMiddleware, async (req, res) => {
+router.patch('/orders/:id/status', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const vehicle = await prisma.vehicle.findUnique({ where: { id: req.params.id } })
-    if (!vehicle) {
-      return res.status(404).json({ message: 'Vehicle not found' })
+    const order = await prisma.order.findUnique({ where: { id: req.params.id } })
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' })
     }
-    const updated = await prisma.vehicle.update({
-      where: { id: req.params.id },
-      data: { status: 'Approved', rejectionReason: null },
-    })
+    const status = String(req.body.status || '')
+    if (!status) {
+      return res.status(400).json({ message: 'status is required' })
+    }
+    const updated = await prisma.order.update({ where: { id: order.id }, data: { status: status as any } })
     createAndBroadcastNotification(
-      vehicle.agentId,
-      'Vehicle Approved',
-      `Your vehicle "${vehicle.title}" has been approved and is now live.`,
-      'success',
-      { type: 'vehicle', id: vehicle.id }
+      order.customerId,
+      'Order Status Updated',
+      `Your order ${order.orderNumber} is now ${status.replace(/([A-Z])/g, ' $1').trim()}.`,
+      'info',
+      { orderId: order.id }
     ).catch(() => {})
-    res.json({ message: 'Vehicle approved', vehicle: updated })
+    res.json({ message: 'Order status updated', order: updated })
   } catch (err: any) {
-    res.status(500).json({ message: err.message || 'Failed to approve vehicle' })
-  }
-})
-
-
-router.patch('/vehicles/:id/reject', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    const vehicle = await prisma.vehicle.findUnique({ where: { id: req.params.id } })
-    if (!vehicle) {
-      return res.status(404).json({ message: 'Vehicle not found' })
-    }
-    const reason = (req.body?.reason as string) || (req.body?.rejectionReason as string) || 'No reason provided'
-    const updated = await prisma.vehicle.update({
-      where: { id: req.params.id },
-      data: { status: 'Rejected', rejectionReason: reason },
-    })
-    createAndBroadcastNotification(
-      vehicle.agentId,
-      'Vehicle Rejected',
-      `Your vehicle "${vehicle.title}" was rejected. Reason: ${reason}`,
-      'error',
-      { type: 'vehicle', id: vehicle.id }
-    ).catch(() => {})
-    res.json({ message: 'Vehicle rejected', vehicle: updated })
-  } catch (err: any) {
-    res.status(500).json({ message: err.message || 'Failed to reject vehicle' })
-  }
-})
-
-
-router.patch('/vehicles/:id/status', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    const status = req.body?.status as string
-    const allowed = ['Approved', 'Sold', 'Rented']
-    if (!allowed.includes(status)) {
-      return res.status(400).json({ message: 'Invalid status. Allowed: Approved, Sold, Rented.' })
-    }
-    const vehicle = await prisma.vehicle.findUnique({
-      where: { id: req.params.id },
-      include: { agent: { select: { id: true, username: true, email: true, phone: true, profilePhoto: true } } },
-    })
-    if (!vehicle) {
-      return res.status(404).json({ message: 'Vehicle not found' })
-    }
-    if (vehicle.status === status) {
-      return res.json({ message: 'Vehicle status unchanged', vehicle: { ...vehicle, status } })
-    }
-    const updated = await prisma.vehicle.update({
-      where: { id: req.params.id },
-      data: { status: status as VehicleStatus, rejectionReason: status === 'Rejected' ? vehicle.rejectionReason : null },
-    })
-    const actionLabel = status === 'Sold' ? 'sold' : status === 'Rented' ? 'rented' : 'back on the market'
-    createAndBroadcastNotification(
-      vehicle.agentId,
-      'Vehicle Status Updated',
-      `Your vehicle "${vehicle.title}" was marked as ${actionLabel}.`,
-      status === 'Approved' ? 'success' : 'info',
-      { type: 'vehicle', id: vehicle.id }
-    ).catch(() => {})
-    res.json({ message: `Vehicle marked as ${actionLabel}`, vehicle: updated })
-  } catch (err: any) {
-    res.status(500).json({ message: err.message || 'Failed to update vehicle status' })
+    res.status(500).json({ message: err.message || 'Failed to update order status' })
   }
 })
 
@@ -596,7 +452,6 @@ router.get('/users', authMiddleware, adminMiddleware, async (req, res) => {
     res.status(500).json({ message: err.message || 'Failed to fetch users' })
   }
 })
-
 
 router.post('/users', authMiddleware, adminMiddleware, async (req, res) => {
   try {
@@ -635,7 +490,6 @@ router.post('/users', authMiddleware, adminMiddleware, async (req, res) => {
   }
 })
 
-
 router.put('/profile', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { phone, profilePhoto, email } = req.body
@@ -659,7 +513,6 @@ router.put('/profile', authMiddleware, adminMiddleware, async (req, res) => {
     res.status(500).json({ message: err.message || 'Failed to update profile' })
   }
 })
-
 
 router.post('/create', authMiddleware, adminMiddleware, async (req, res) => {
   try {
@@ -694,14 +547,14 @@ router.post('/create', authMiddleware, adminMiddleware, async (req, res) => {
 
 router.get('/overview', authMiddleware, adminMiddleware, async (_req, res) => {
   try {
-    const [agentCount, pendingAgentCount, propertyCount, pendingPropertyCount, vehicleCount, pendingVehicleCount] =
+    const [sellerCount, pendingSellerCount, productCount, pendingProductCount, orderCount, workerCount] =
       await Promise.all([
         prisma.user.count({ where: { role: 'agent' } }),
         prisma.user.count({ where: { role: 'agent', status: 'Pending' } }),
-        prisma.property.count(),
-        prisma.property.count({ where: { status: 'Pending' } }),
-        prisma.vehicle.count(),
-        prisma.vehicle.count({ where: { status: 'Pending' } }),
+        prisma.product.count(),
+        prisma.product.count({ where: { status: 'Pending' } }),
+        prisma.order.count(),
+        prisma.worker.count(),
       ])
 
     const rawStats = await prisma.$queryRaw<
@@ -718,7 +571,7 @@ router.get('/overview', authMiddleware, adminMiddleware, async (_req, res) => {
       else if (row.status === 'Failed') { paymentStats.failedCount = count }
     }
 
-    const [recentAgents, recentPayments, recentProperties, recentVehicles] = await Promise.all([
+    const [recentSellers, recentPayments, recentProducts, recentOrders] = await Promise.all([
       prisma.user.findMany({
         where: { role: 'agent' },
         orderBy: { createdAt: 'desc' },
@@ -728,50 +581,49 @@ router.get('/overview', authMiddleware, adminMiddleware, async (_req, res) => {
       prisma.payment.findMany({
         orderBy: { createdAt: 'desc' },
         take: 5,
-        select: { id: true, propertyTitle: true, method: true, paymentType: true, status: true, amount: true },
+        select: { id: true, orderTitle: true, method: true, paymentType: true, status: true, amount: true },
       }),
-      prisma.property.findMany({
+      prisma.product.findMany({
         orderBy: { createdAt: 'desc' },
         take: 5,
         select: {
-          id: true, title: true, city: true, price: true, status: true, createdAt: true,
-          agent: { select: { username: true, email: true } },
+          id: true, name: true, status: true, createdAt: true,
+          seller: { select: { username: true, email: true } },
         },
       }),
-      prisma.vehicle.findMany({
+      prisma.order.findMany({
         orderBy: { createdAt: 'desc' },
         take: 5,
         select: {
-          id: true, title: true, make: true, vehicleModel: true, manufacturingYear: true,
-          price: true, status: true, createdAt: true,
-          agent: { select: { username: true, email: true } },
+          id: true, orderNumber: true, totalPrice: true, status: true, createdAt: true,
+          customer: { select: { username: true, email: true } },
         },
       }),
     ])
 
     res.json({
       counts: {
-        agents: agentCount, pendingAgents: pendingAgentCount,
-        properties: propertyCount, pendingProperties: pendingPropertyCount,
-        vehicles: vehicleCount, pendingVehicles: pendingVehicleCount,
+        sellers: sellerCount, pendingSellers: pendingSellerCount,
+        products: productCount, pendingProducts: pendingProductCount,
+        orders: orderCount, workers: workerCount,
       },
       paymentStats,
-      recentAgents,
+      recentSellers,
       recentPayments,
-      recentProperties,
-      recentVehicles,
+      recentProducts,
+      recentOrders,
     })
   } catch (err: any) {
     res.status(500).json({ message: err.message || 'Failed to fetch overview' })
   }
 })
 
-
 router.get('/stats', authMiddleware, adminMiddleware, async (_req, res) => {
   try {
-    const [userCount, propertyCount, paymentCount] = await Promise.all([
+    const [userCount, productCount, orderCount, paymentCount] = await Promise.all([
       prisma.user.count(),
-      prisma.property.count(),
+      prisma.product.count(),
+      prisma.order.count(),
       prisma.payment.count(),
     ])
 
@@ -802,7 +654,8 @@ router.get('/stats', authMiddleware, adminMiddleware, async (_req, res) => {
 
     res.json({
       users: userCount,
-      properties: propertyCount,
+      products: productCount,
+      orders: orderCount,
       payments: paymentCount,
       paymentStats,
     })
@@ -810,9 +663,6 @@ router.get('/stats', authMiddleware, adminMiddleware, async (_req, res) => {
     res.status(500).json({ message: err.message || 'Failed to fetch stats' })
   }
 })
-
-
-
 
 router.post('/resend-test', authMiddleware, async (_req, res) => {
   try {

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { ToastProvider } from '@/components/ui/toast-provider'
 import { AuthProvider } from '@/components/auth/auth-guard'
+import { CartProvider } from '@/lib/cart'
 import { SmoothScroll } from '@/components/smooth-scroll'
 import { BottomNav } from '@/components/bottom-nav'
 import { CapacitorInit } from '@/components/capacitor-init'
@@ -8,9 +9,9 @@ import { I18nProvider } from '@/lib/i18n'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'DawoLife — Ethiopia\'s Digital Real Estate Marketplace',
+  title: 'Hachalu Protocol — Ethiopian Garments & Custom Tailoring',
   description:
-    'Find homes for sale and rent across Ethiopia. Browse verified listings in Oromia, Addis Ababa, Shaggar and beyond on DawoLife.',
+    'Shop ready-made garments and commission made-to-measure tailoring in Ethiopia. Order tracking, quality checks and production management on Hachalu Protocol.',
   generator: 'v0.app',
   other: {
     'mobile-web-app-capable': 'yes',
@@ -41,11 +42,13 @@ export default function RootLayout({
         <ToastProvider />
         <I18nProvider>
           <AuthProvider>
-            <CapacitorInit />
-            <SmoothScroll>
-              <div className="max-lg:pb-[calc(env(safe-area-inset-bottom,0px)+4rem)]">{children}</div>
-            </SmoothScroll>
-            <BottomNav />
+            <CartProvider>
+              <CapacitorInit />
+              <SmoothScroll>
+                <div className="max-lg:pb-[calc(env(safe-area-inset-bottom,0px)+4rem)]">{children}</div>
+              </SmoothScroll>
+              <BottomNav />
+            </CartProvider>
           </AuthProvider>
         </I18nProvider>
       </body>

@@ -28,7 +28,7 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
       return res.status(400).json({ message: 'No file uploaded' })
     }
     const field = req.body.field || 'document'
-    const folder = `dawolife/agents/${req.user!.userId}/${field}`
+    const folder = `hachalu/sellers/${req.user!.userId}/${field}`
     const { url, publicId } = await uploadFile({
       buffer: req.file!.buffer,
       mime: req.file!.mimetype,
@@ -177,28 +177,20 @@ router.get('/profile', authMiddleware, async (req, res) => {
 })
 
 
-router.get('/properties', authMiddleware, agentMiddleware, async (req, res) => {
+router.get('/products', authMiddleware, agentMiddleware, async (req, res) => {
   try {
-    const properties = await prisma.property.findMany({
-      where: { agentId: req.user!.userId },
+    const products = await prisma.product.findMany({
+      where: { sellerId: req.user!.userId },
+      include: {
+        category: { select: { id: true, name: true, slug: true } },
+        brand: { select: { id: true, name: true } },
+        variants: true,
+      },
       orderBy: { createdAt: 'desc' },
     })
-    res.json({ properties })
+    res.json({ products })
   } catch (err: any) {
-    res.status(500).json({ message: err.message || 'Failed to fetch properties' })
-  }
-})
-
-
-router.get('/vehicles', authMiddleware, agentMiddleware, async (req, res) => {
-  try {
-    const vehicles = await prisma.vehicle.findMany({
-      where: { agentId: req.user!.userId },
-      orderBy: { createdAt: 'desc' },
-    })
-    res.json({ vehicles })
-  } catch (err: any) {
-    res.status(500).json({ message: err.message || 'Failed to fetch vehicles' })
+    res.status(500).json({ message: err.message || 'Failed to fetch products' })
   }
 })
 

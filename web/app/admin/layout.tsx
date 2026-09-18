@@ -11,7 +11,7 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
       role="admin"
       name={user?.name || 'Admin'}
       email={user?.email || ''}
-      title="Enterprise Admin Portal"
+      title="Hachalu Admin Portal"
       profilePhoto={user?.profilePhoto}
     >
       {children}

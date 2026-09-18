@@ -32,3 +32,6 @@ server/test-fb.mjs
 
 # Backup archives (large, not source)
 *.zip
+*.dump
+google-services*.json
+google-services *.json

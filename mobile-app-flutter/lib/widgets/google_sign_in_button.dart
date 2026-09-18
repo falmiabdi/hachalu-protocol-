@@ -47,6 +47,7 @@ class GoogleSignInButton extends StatelessWidget {
                     'assets/images/google_logo.png',
                     width: 20,
                     height: 20,
+                    errorBuilder: (_, _, _) => const Icon(Icons.account_circle, size: 20),
                   ),
                   const SizedBox(width: 12),
                   Text(

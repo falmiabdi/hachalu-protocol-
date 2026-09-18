@@ -5,9 +5,10 @@ const router = Router()
 
 interface OverviewStats {
   activeUsers: number
-  verifiedAgents: number
-  listedHouses: number
-  listedCars: number
+  sellers: number
+  listedProducts: number
+  pendingProducts: number
+  orders: number
 }
 
 let cache: { data: OverviewStats; expiresAt: number } | null = null
@@ -20,15 +21,16 @@ router.get('/overview', async (_req, res) => {
       return res.json(cache.data)
     }
 
-    const [activeUsers, verifiedAgents, listedHouses, listedCars] = await Promise.all([
+    const [activeUsers, sellers, listedProducts, pendingProducts, orders] = await Promise.all([
       prisma.user.count({ where: { emailVerified: true } }),
       prisma.user.count({ where: { role: { in: ['agent', 'owner'] }, status: 'Approved' } }),
-      prisma.property.count({ where: { status: 'Approved' } }),
-      prisma.vehicle.count({ where: { status: 'Approved' } }),
+      prisma.product.count({ where: { status: 'Approved' } }),
+      prisma.product.count({ where: { status: 'Pending' } }),
+      prisma.order.count(),
     ])
 
     cache = {
-      data: { activeUsers, verifiedAgents, listedHouses, listedCars },
+      data: { activeUsers, sellers, listedProducts, pendingProducts, orders },
       expiresAt: now + CACHE_TTL_MS,
     }
     res.json(cache.data)

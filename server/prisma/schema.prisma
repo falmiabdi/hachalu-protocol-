@@ -1,6 +1,10 @@
 generator client {
   provider = "prisma-client-js"
-  binaryTargets = ["native", "rhel-openssl-3.0.x", "rhel-openssl-1.1.x", "debian-openssl-3.0.x"]
+  // NOTE (Hachalu dev): binaryTargets limited to "native" locally because the
+  // engine CDN download of the linux targets stalls on this dev machine.
+  // Restore to ["native","rhel-openssl-3.0.x","rhel-openssl-1.1.x","debian-openssl-3.0.x"]
+  // before deploying to Render/cPanel (postinstall regenerates engines there).
+  binaryTargets = ["native"]
 }
 
 datasource db {
@@ -13,6 +17,7 @@ enum UserRole {
   agent
   owner
   user
+  worker
 }
 
 enum UserStatus {
@@ -22,22 +27,39 @@ enum UserStatus {
   Suspended
 }
 
-enum PropertyStatus {
+enum ProductStatus {
   Draft
   Pending
   Approved
   Rejected
-  Sold
-  Rented
+  OutOfStock
+  Archived
 }
 
-enum VehicleStatus {
-  Draft
-  Pending
-  Approved
-  Rejected
-  Sold
-  Rented
+enum ProductGender {
+  Male
+  Female
+  Child
+  Unisex
+}
+
+enum OrderStatus {
+  PendingPayment
+  Paid
+  MeasurementPending
+  MeasurementConfirmed
+  Assigned
+  InProduction
+  Packed
+  Delivered
+  Completed
+  Cancelled
+  Refunded
+}
+
+enum OrderType {
+  ready_made
+  custom
 }
 
 enum PaymentStatus {
@@ -54,8 +76,88 @@ enum PaymentMethod {
 }
 
 enum SavedItemType {
-  property
-  vehicle
+  product
+}
+
+enum JobStatus {
+  Assigned
+  Started
+  InProgress25
+  InProgress50
+  InProgress75
+  Ready
+  QualityCheck
+  Completed
+}
+
+enum WorkerStatus {
+  Available
+  Busy
+  OnLeave
+  Inactive
+}
+
+enum MachineStatus {
+  Available
+  InUse
+  Maintenance
+  Disabled
+}
+
+enum MaterialCategory {
+  Fabric
+  Thread
+  Buttons
+  Zippers
+  Lining
+  Other
+}
+
+enum MovementType {
+  In
+  Out
+}
+
+enum Unit {
+  meter
+  piece
+  roll
+  kg
+  pack
+  other
+}
+
+enum MeasurementUnit {
+  cm
+  inch
+  meter
+}
+
+enum CommissionStatus {
+  Pending
+  Paid
+  Void
+}
+
+enum CommissionScope {
+  Order
+  Product
+}
+
+enum PermissionType {
+  EDIT
+  DELETE
+}
+
+enum PermissionStatus {
+  Pending
+  Approved
+  Rejected
+}
+
+enum PermissionEntityType {
+  PRODUCT
+  ORDER
 }
 
 model User {
@@ -86,8 +188,6 @@ model User {
   createdAt          DateTime   @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime   @updatedAt @db.Timestamptz(3)
 
-  properties         Property[]
-  vehicles           Vehicle[]
   savedItems         SavedItem[]
   announcements      Announcement[]
   deviceTokens       DeviceToken[]
@@ -95,6 +195,13 @@ model User {
   reviewsReceived    Review[]            @relation("agentReviews")
   permissionRequests PermissionRequest[] @relation("permissionRequesters")
   permissionsDecided PermissionRequest[] @relation("permissionDeciders")
+  products           Product[]
+  customerOrders     Order[]             @relation("orderCustomers")
+  sellerOrders       Order[]             @relation("orderSellers")
+  measurements       CustomerMeasurement[]
+  employeeProfile    Worker?
+  productReviews     ProductReview[]
+  commissions        Commission[]        @relation("commissionSellers")
 
   @@index([role, status])
   @@map("users")
@@ -114,172 +221,328 @@ model DeviceToken {
   @@map("device_tokens")
 }
 
-model Property {
-  id               String         @id @default(uuid()) @db.Uuid
-  title            String         @db.VarChar(200)
-  type             String
-  listingType      String
-  price            Float
-  priceType        String
-  region           String
-  city             String
-  subCity          String?
-  woreda           String?
-  kebele           String?
-  parcel           String?
-  block            String?
-  floorNumber      String?
-  houseNumber      String?
-  area             Float?
-  bedrooms         Int?
-  bathrooms        Int?
-  condition        String?
-  legalizedYear    Int?
-  description      String?
-  features         Json           @default("[]")
-  images           Json           @default("[]")
-  videoUrl         String?
-  featured         Boolean        @default(false)
-  locationDocument String?
-  posterType       String?
-  ownerType        String?
-  contactMode      String?        @default("Admin")
-  agentId          String         @db.Uuid
-  agentName        String
-  displayPhone     String?
-  displayPhoto     String?
-  
-  
-  
-  
-  contactUserId    String?        @db.Uuid
-  status           PropertyStatus @default(Draft)
-  rejectionReason  String?
-  latitude         Float?
-  longitude        Float?
-  createdAt        DateTime       @default(now()) @db.Timestamptz(3)
-  updatedAt        DateTime       @updatedAt @db.Timestamptz(3)
+model Category {
+  id          String         @id @default(uuid()) @db.Uuid
+  name        String         @db.VarChar(100)
+  slug        String         @unique
+  gender      ProductGender
+  description String?
+  sortOrder   Int            @default(0)
+  active      Boolean        @default(true)
+  createdAt   DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime       @updatedAt @db.Timestamptz(3)
 
-  agent User @relation(fields: [agentId], references: [id])
+  products  Product[]
+  templates MeasurementTemplate[]
 
-  @@index([agentId])
-  @@index([status])
-  @@index([createdAt])
-  @@map("properties")
+  @@unique([slug, gender])
+  @@map("hachalu_categories")
 }
 
-model Vehicle {
-  id                      String        @id @default(uuid()) @db.Uuid
-  title                   String        @db.VarChar(200)
-  vehicleId               String        @unique
-  listingType             String
-  vehicleCategory         String
-  make                    String
-  vehicleModel            String
-  trimVersion             String?
-  manufacturingYear       Int
-  registrationYear        Int?
-  vin                     String?
-  engineNumber            String?
-  plateNumber             String?
-  color                   String
-  countryOfOrigin         String
-  fuelType                String?
-  engineSize              Float?
-  horsepower              Float?
-  transmission            String?
-  drivetrain              String?
-  cylinders               Int?
-  seatingCapacity         Int?
-  doors                   Int?
-  mileage                 Float?
-  fuelConsumption         String?
-  fuelTankCapacity        Float?
-  groundClearance         Float?
-  weight                  Float?
-  tireSize                String?
-  condition               String
-  accidentFree            Boolean?
-  accidentHistory         String?
-  serviceHistoryAvailable Boolean?
-  ownershipCount          Int?
-  imported                Boolean?
-  locallyAssembled        Boolean?
-  safetyFeatures          Json          @default("[]")
-  interiorFeatures        Json          @default("[]")
-  exteriorFeatures        Json          @default("[]")
-  dailyRate               Float?
-  weeklyRate              Float?
-  monthlyRate             Float?
-  securityDeposit         Float?
-  minRentalDays           Int?
-  maxRentalDays           Int?
-  driverIncluded          Boolean?
-  selfDrive               Boolean?
-  fuelPolicy              String?
-  mileageLimit            Int?
-  extraKmCharge           Float?
-  deliveryAvailable       Boolean?
-  airportPickup           Boolean?
-  availableLocations      Json?
-  availableDates          String?
-  driverAgeRequirement    Int?
-  minDrivingExperience    Int?
-  drivingLicenseRequired  String?
-  passportRequired        Boolean?
-  smokingAllowed          Boolean?
-  petsAllowed             Boolean?
-  offroadAllowed          Boolean?
-  crossborderAllowed      Boolean?
-  insuranceIncluded       Boolean?
-  damageLiability         String?
-  sellingPrice            Float?
-  negotiable              Boolean?
-  financingAvailable      Boolean?
-  exchangeAccepted        Boolean?
-  bankLoanAccepted        Boolean?
-  regionRegistration      String?
-  ownershipCertificate    Boolean?
-  roadFundPaid            Boolean?
-  insuranceValid          Boolean?
-  inspectionCertificate   Boolean?
-  customsClearance        Boolean?
-  dutyPaid                Boolean?
-  plateType               String?
-  region                  String
-  city                    String
-  subCity                 String?
-  woreda                  String?
-  latitude                Float?
-  longitude               Float?
-  pickupAddress           String?
-  description             String?
-  images                  Json          @default("[]")
-  videoUrl                String?
-  price                   Float
-  priceType               String
-  features                Json          @default("[]")
-  featured                Boolean       @default(false)
-  agentId                 String        @db.Uuid
-  agentName               String
-  displayPhone            String?
-  displayPhoto            String?
-  
-  contactUserId           String?       @db.Uuid
-  status                  VehicleStatus @default(Draft)
-  rejectionReason         String?
-  views                   Int           @default(0)
-  favorites               Int           @default(0)
-  createdAt               DateTime      @default(now()) @db.Timestamptz(3)
-  updatedAt               DateTime      @updatedAt @db.Timestamptz(3)
+model Brand {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique @db.VarChar(100)
+  origin    String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  agent User @relation(fields: [agentId], references: [id])
+  products Product[]
 
-  @@index([agentId])
+  @@map("hachalu_brands")
+}
+
+model ColorOption {
+  id       String   @id @default(uuid()) @db.Uuid
+  name     String   @unique @db.VarChar(50)
+  hex      String?  @db.VarChar(9)
+  active   Boolean  @default(true)
+
+  variants ProductVariant[]
+
+  @@map("hachalu_color_options")
+}
+
+model SizeOption {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique @db.VarChar(30)
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  variants ProductVariant[]
+
+  @@map("hachalu_size_options")
+}
+
+model Product {
+  id              String        @id @default(uuid()) @db.Uuid
+  name            String        @db.VarChar(200)
+  slug            String        @unique
+  description     String?       @db.Text
+  categoryId      String        @db.Uuid
+  gender          ProductGender
+  ageGroup        String?
+  brandId         String?       @db.Uuid
+  countryOfOrigin String?
+  fabric          String?
+  isReadyMade     Boolean       @default(true)
+  isCustomizable  Boolean       @default(false)
+  featured        Boolean       @default(false)
+  status          ProductStatus @default(Draft)
+  rejectionReason String?
+  images          Json          @default("[]")
+  videoUrl        String?
+  sellerId        String        @db.Uuid
+  sellerName      String
+  displayPhone    String?
+  contactMode     String?       @default("Admin")
+  contactUserId   String?       @db.Uuid
+  views           Int           @default(0)
+  favorites       Int           @default(0)
+  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime      @updatedAt @db.Timestamptz(3)
+
+  category  Category        @relation(fields: [categoryId], references: [id])
+  brand     Brand?          @relation(fields: [brandId], references: [id])
+  seller    User            @relation(fields: [sellerId], references: [id])
+  variants  ProductVariant[]
+  orderItems OrderItem[]
+  reviews   ProductReview[]
+  productionJobs ProductionJob[]
+  commissions Commission[]
+
+  @@index([sellerId])
+  @@index([categoryId])
   @@index([status])
   @@index([createdAt])
-  @@index([vehicleId])
-  @@map("vehicles")
+  @@map("hachalu_products")
+}
+
+model ProductVariant {
+  id        String    @id @default(uuid()) @db.Uuid
+  sku       String    @unique
+  productId String    @db.Uuid
+  sizeId    String?   @db.Uuid
+  colorId   String?   @db.Uuid
+  price     Float
+  stock     Int       @default(0)
+  status    String    @default("active")
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+
+  product    Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  size       SizeOption?   @relation(fields: [sizeId], references: [id])
+  color      ColorOption?  @relation(fields: [colorId], references: [id])
+  orderItems OrderItem[]
+
+  @@unique([productId, sizeId, colorId])
+  @@index([productId])
+  @@map("hachalu_product_variants")
+}
+
+model MeasurementTemplate {
+  id         String   @id @default(uuid()) @db.Uuid
+  name       String   @unique @db.VarChar(100)
+  categoryId String?  @db.Uuid
+  fields     Json     @default("[]")
+  active     Boolean  @default(true)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  category    Category?           @relation(fields: [categoryId], references: [id])
+  measurements CustomerMeasurement[]
+  orderItems  OrderItem[]
+
+  @@index([categoryId])
+  @@map("hachalu_measurement_templates")
+}
+
+model CustomerMeasurement {
+  id            String           @id @default(uuid()) @db.Uuid
+  templateId    String           @db.Uuid
+  customerId    String           @db.Uuid
+  enteredById   String?          @db.Uuid
+  orderId       String?
+  values        Json             @default("{}")
+  unit          MeasurementUnit  @default(cm)
+  notes         String?
+  referencePhoto String?
+  createdAt     DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime         @updatedAt @db.Timestamptz(3)
+
+  template MeasurementTemplate @relation(fields: [templateId], references: [id])
+  customer User                @relation(fields: [customerId], references: [id])
+
+  @@index([customerId])
+  @@index([templateId])
+  @@index([orderId])
+  @@map("hachalu_customer_measurements")
+}
+
+model Order {
+  id             String      @id @default(uuid()) @db.Uuid
+  orderNumber    String      @unique
+  type           OrderType
+  customerId     String      @db.Uuid
+  sellerId       String?     @db.Uuid
+  status         OrderStatus @default(PendingPayment)
+  totalPrice     Float
+  paymentStatus  String?     @default("Pending")
+  deliveryInfo   Json?
+  notes          String?
+  cancelledReason String?
+  createdAt      DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime    @updatedAt @db.Timestamptz(3)
+
+  customer User        @relation("orderCustomers", fields: [customerId], references: [id])
+  seller   User?       @relation("orderSellers", fields: [sellerId], references: [id])
+  items    OrderItem[]
+  productionJobs ProductionJob[]
+  commissions Commission[]
+
+  @@index([customerId])
+  @@index([sellerId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("hachalu_orders")
+}
+
+model OrderItem {
+  id            String   @id @default(uuid()) @db.Uuid
+  orderId       String   @db.Uuid
+  type          OrderType
+  productId     String?  @db.Uuid
+  variantId     String?  @db.Uuid
+  quantity      Int      @default(1)
+  unitPrice     Float
+  subtotal      Float
+  templateId    String?  @db.Uuid
+  measurementId String?
+  styleNotes    Json?
+  status        String   @default("active")
+
+  order       Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product?             @relation(fields: [productId], references: [id])
+  variant     ProductVariant?      @relation(fields: [variantId], references: [id])
+  template    MeasurementTemplate? @relation(fields: [templateId], references: [id])
+  productionJobs ProductionJob[]
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("hachalu_order_items")
+}
+
+model Worker {
+  id        String       @id @default(uuid()) @db.Uuid
+  userId    String       @unique @db.Uuid
+  specialty String?
+  phone     String?
+  status    WorkerStatus @default(Available)
+  machineId String?      @db.Uuid
+  createdAt DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime     @updatedAt @db.Timestamptz(3)
+
+  user    User               @relation(fields: [userId], references: [id])
+  machine Machine?           @relation(fields: [machineId], references: [id])
+  jobs    WorkerAssignment[]
+
+  @@index([status])
+  @@map("hachalu_workers")
+}
+
+model Machine {
+  id               String        @id @default(uuid()) @db.Uuid
+  name             String        @db.VarChar(100)
+  type             String?
+  code             String?       @unique
+  status           MachineStatus @default(Available)
+  location         String?
+  maintenanceNotes String?
+  lastMaintenance  DateTime?     @db.Timestamptz(3)
+  nextMaintenance  DateTime?     @db.Timestamptz(3)
+  createdAt        DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime      @updatedAt @db.Timestamptz(3)
+
+  workers Worker[]
+
+  @@index([status])
+  @@map("hachalu_machines")
+}
+
+model ProductionJob {
+  id          String    @id @default(uuid()) @db.Uuid
+  orderId     String    @db.Uuid
+  orderItemId String?   @db.Uuid
+  productId   String?   @db.Uuid
+  status      JobStatus @default(Assigned)
+  startTime   DateTime? @db.Timestamptz(3)
+  endTime     DateTime? @db.Timestamptz(3)
+  notes       String?
+  qcStatus    String?   @default("Pending")
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+
+  order     Order                 @relation(fields: [orderId], references: [id])
+  orderItem OrderItem?            @relation(fields: [orderItemId], references: [id])
+  product   Product?              @relation(fields: [productId], references: [id])
+  assignees WorkerAssignment[]
+
+  @@index([orderId])
+  @@index([status])
+  @@map("hachalu_production_jobs")
+}
+
+model WorkerAssignment {
+  id          String    @id @default(uuid()) @db.Uuid
+  jobId         String    @db.Uuid
+  workerId      String    @db.Uuid
+  role          String?   @default("tailor")
+  assignedAt    DateTime  @default(now()) @db.Timestamptz(3)
+  completedAt   DateTime? @db.Timestamptz(3)
+
+  job    ProductionJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  worker Worker        @relation(fields: [workerId], references: [id])
+
+  @@unique([jobId, workerId])
+  @@index([workerId])
+  @@map("hachalu_worker_assignments")
+}
+
+model Material {
+  id              String           @id @default(uuid()) @db.Uuid
+  name            String           @db.VarChar(100)
+  category        MaterialCategory
+  unit            Unit             @default(meter)
+  currentQuantity Float            @default(0)
+  minStockLevel   Float            @default(10)
+  notes           String?
+  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @db.Timestamptz(3)
+
+  movements StockMovement[]
+
+  @@index([category])
+  @@map("hachalu_materials")
+}
+
+model StockMovement {
+  id          String       @id @default(uuid()) @db.Uuid
+  materialId  String       @db.Uuid
+  type        MovementType
+  quantity    Float
+  note        String?
+  orderId     String?
+  createdById String?      @db.Uuid
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@index([materialId])
+  @@index([createdAt])
+  @@map("hachalu_stock_movements")
 }
 
 model Payment {
@@ -295,8 +558,7 @@ model Payment {
   buyerName        String
   buyerEmail       String
   buyerPhone       String
-  propertyId       String?
-  propertyTitle    String?
+  orderTitle       String?
   notificationData Json?
   createdAt        DateTime      @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime      @updatedAt @db.Timestamptz(3)
@@ -326,7 +588,7 @@ model Notification {
 
 model Message {
   id            String   @id @default(uuid()) @db.Uuid
-  propertyId    String
+  productId     String
   senderId      String   @db.Uuid
   senderName    String
   senderRole    String
@@ -337,7 +599,7 @@ model Message {
   createdAt     DateTime @default(now()) @db.Timestamptz(3)
   updatedAt     DateTime @updatedAt @db.Timestamptz(3)
 
-  @@index([propertyId])
+  @@index([productId])
   @@index([senderId])
   @@index([recipientId])
   @@index([createdAt])
@@ -374,19 +636,21 @@ model SavedItem {
 }
 
 model Setting {
-  id              String   @id @default("default")
-  contactPhone1   String?
-  contactPhone2   String?
-  contactPhone3   String?
-  contactEmail    String?
-  socialFacebook  String?
-  socialTelegram  String?
-  socialWhatsapp  String?
-  socialTiktok    String?
-  socialLinkedin  String?
-  socialInstagram String?
-  socialYoutube   String?
-  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  id               String   @id @default("default")
+  contactPhone1    String?
+  contactPhone2    String?
+  contactPhone3    String?
+  contactEmail     String?
+  socialFacebook   String?
+  socialTelegram   String?
+  socialWhatsapp   String?
+  socialTiktok     String?
+  socialLinkedin   String?
+  socialInstagram  String?
+  socialYoutube    String?
+  lowStockThreshold Int?    @default(10)
+  defaultCommissionRate Float? @default(0.10)
+  updatedAt        DateTime @updatedAt @db.Timestamptz(3)
 
   @@map("settings")
 }
@@ -408,24 +672,47 @@ model Review {
   @@map("reviews")
 }
 
-enum PermissionType {
-  EDIT
-  DELETE
+model ProductReview {
+  id        String   @id @default(uuid()) @db.Uuid
+  productId String   @db.Uuid
+  orderId   String?  @db.Uuid
+  userId    String   @db.Uuid
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([userId, productId])
+  @@index([productId])
+  @@map("hachalu_product_reviews")
 }
 
-enum PermissionStatus {
-  Pending
-  Approved
-  Rejected
+model Commission {
+  id         String            @id @default(uuid()) @db.Uuid
+  sellerId   String            @db.Uuid
+  orderId    String?           @db.Uuid
+  productId  String?           @db.Uuid
+  scope      CommissionScope   @default(Order)
+  rate       Float
+  amount     Float
+  status     CommissionStatus  @default(Pending)
+  paidAt     DateTime?         @db.Timestamptz(3)
+  createdAt  DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime          @updatedAt @db.Timestamptz(3)
+
+  seller  User     @relation("commissionSellers", fields: [sellerId], references: [id])
+  order   Order?   @relation(fields: [orderId], references: [id])
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@index([sellerId])
+  @@index([orderId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("hachalu_commissions")
 }
-
-enum PermissionEntityType {
-  PROPERTY
-  VEHICLE
-}
-
-
-
 
 model PermissionRequest {
   id          String               @id @default(uuid()) @db.Uuid

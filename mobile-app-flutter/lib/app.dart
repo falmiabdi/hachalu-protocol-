@@ -1,111 +1,44 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../core/network/api_client.dart';
-import '../core/network/websocket_service.dart';
 import '../core/theme/app_colors.dart';
-import '../data/repositories/message_repository.dart';
 import '../features/auth/login_screen.dart';
-import '../features/auth/signup_screen.dart';
-import '../features/home/home_screen.dart';
-import '../features/messages/messages_screen.dart';
-import '../features/more/more_screen.dart';
-import '../features/saved/saved_screen.dart';
-import '../features/sell/sell_screen.dart';
+import '../features/shop/home_screen.dart';
+import '../features/shop/catalog_screen.dart';
+import '../features/cart/cart_screen.dart';
+import '../features/orders/orders_screen.dart';
+import '../features/profile/hachalu_profile_screen.dart';
 import '../providers/auth_provider.dart';
+import '../providers/cart_provider.dart';
 
-
-class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+class HachaluAppShell extends StatefulWidget {
+  const HachaluAppShell({super.key});
 
   @override
-  State<AppShell> createState() => _AppShellState();
+  State<HachaluAppShell> createState() => _HachaluAppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _HachaluAppShellState extends State<HachaluAppShell> {
   int _index = 0;
-  int _unread = 0;
-  Timer? _unreadTimer;
-  StreamSubscription<WSMessage>? _wsSub;
-  bool _wsConnected = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadUnread());
-    
-    _unreadTimer = Timer.periodic(const Duration(seconds: 30), (_) => _loadUnread());
-    
-    _wsSub = context.read<WebSocketService>().messages.listen((msg) {
-      if (!mounted) return;
-      switch (msg.type) {
-        case WSMessageType.message:
-        case WSMessageType.notification:
-        case WSMessageType.unreadCount:
-          _loadUnread();
-          break;
-        default:
-          break;
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _unreadTimer?.cancel();
-    _wsSub?.cancel();
-    context.read<WebSocketService>().disconnect();
-    super.dispose();
-  }
-
-  Future<void> _loadUnread() async {
-    final auth = context.read<AuthProvider>();
-    if (!auth.isLoggedIn) {
-      if (_unread != 0) setState(() => _unread = 0);
-      return;
-    }
-    try {
-      final count = await context.read<MessageRepository>().fetchUnreadCount();
-      if (mounted && count != _unread) setState(() => _unread = count);
-    } catch (_) {
-  // Ignore polling failures.
-  
-      
-    }
-  }
-
-  Future<void> _syncConnection(AuthProvider auth) async {
-    final ws = context.read<WebSocketService>();
-    if (auth.isLoggedIn && !_wsConnected) {
-      _wsConnected = true;
-      await ws.connect();
-    } else if (!auth.isLoggedIn && _wsConnected) {
-      _wsConnected = false;
-      await ws.disconnect();
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    _syncConnection(auth);
+    final cart = context.watch<CartProvider>();
 
     return Scaffold(
       body: IndexedStack(
         index: _index,
-        children: [
-          const HomeScreen(),
-          const SavedScreen(),
-          const SellScreen(),
-          const MessagesScreen(),
-          const MoreScreen(),
+        children: const [
+          HachaluHomeScreen(),
+          CatalogScreen(),
+          CartScreen(),
+          OrdersScreen(),
+          HachaluProfileScreen(),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
-        onTap: (index) => _onTap(context, index, auth),
+        onTap: (index) => _onTap(context, index),
         backgroundColor: Colors.white,
         selectedItemColor: AppColors.primary,
         unselectedItemColor: AppColors.mutedForeground,
@@ -114,53 +47,36 @@ class _AppShellState extends State<AppShell> {
         type: BottomNavigationBarType.fixed,
         items: [
           const BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          const BottomNavigationBarItem(icon: Icon(Icons.bookmark_border), label: 'Saved'),
           const BottomNavigationBarItem(
-            icon: Icon(Icons.sell_outlined),
-            label: 'Sell',
-          ),
+              icon: Icon(Icons.checkroom), label: 'Shop'),
           BottomNavigationBarItem(
-            icon: _UnreadBadge(icon: Icons.chat_bubble_outline, count: _unread),
-            label: 'Messages',
+            icon: _CartBadge(
+                icon: Icons.shopping_cart_outlined, count: cart.count),
+            label: 'Cart',
           ),
           const BottomNavigationBarItem(
-            icon: Icon(Icons.more_horiz),
-            label: 'More',
-          ),
+              icon: Icon(Icons.receipt_long_outlined), label: 'Orders'),
+          const BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline), label: 'Profile'),
         ],
       ),
     );
   }
 
-  void _onTap(BuildContext context, int index, AuthProvider auth) {
-    switch (index) {
-      case 1: 
-        if (!auth.isLoggedIn) {
-          _push(context, const SignupScreen());
-          return;
-        }
-      case 3: 
-        if (!auth.isLoggedIn) {
-          _pushLogin(context);
-          return;
-        }
+  void _onTap(BuildContext context, int index) {
+    final auth = context.read<AuthProvider>();
+    if (!auth.isLoggedIn) {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+      return;
     }
     setState(() => _index = index);
   }
-
-  void _pushLogin(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-    );
-  }
-
-  void _push(BuildContext context, Widget screen) {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
-  }
 }
 
-class _UnreadBadge extends StatelessWidget {
-  const _UnreadBadge({required this.icon, required this.count});
+class _CartBadge extends StatelessWidget {
+  const _CartBadge({required this.icon, required this.count});
 
   final IconData icon;
   final int count;
@@ -185,7 +101,10 @@ class _UnreadBadge extends StatelessWidget {
               child: Text(
                 count > 99 ? '99+' : '$count',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold),
               ),
             ),
           ),

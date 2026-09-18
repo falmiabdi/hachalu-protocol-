@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Menu, Plus, X, User, ChevronDown, Newspaper, Mail, Phone } from "lucide-react"
+import { Menu, Plus, X, User, ChevronDown, Newspaper, Mail, Phone, ShoppingBag } from "lucide-react"
 import { Logo } from "@/components/logo"
 import Image from "next/image"
 import { LanguageDropdown } from "@/components/language-dropdown"
 import { useI18n } from "@/lib/i18n"
 import { useAuth } from "@/components/auth/auth-guard"
+import { useCart } from "@/lib/cart"
 import { getApiUrl } from "@/lib/get-api-url"
 
 interface SocialSettings {
@@ -91,16 +92,15 @@ const brandColors: Record<string, string> = {
 
 const navLinks = [
   { label: "Home", href: "/" },
-  { label: "Condominiums", href: "/#listings" },
-  { label: "Cars", href: "/#vehicles" },
-  { label: "Services", href: "/#services" },
-  { label: "Map View", href: "/#map" },
-  { label: "Agents", href: "/#agents" },
+  { label: "Shop", href: "/products" },
+  { label: "Custom", href: "/products?custom=1" },
+  { label: "Orders", href: "/orders" },
+  { label: "Sell", href: "/sell" },
 ]
 
 const moreLinks = [
-  { label: "News", href: "/news", icon: Newspaper },
-  { label: "Sell", href: "/sell", icon: Plus },
+  { label: "Cart", href: "/cart", icon: ShoppingBag },
+  { label: "Sell on Hachalu", href: "/sell", icon: Plus },
   { label: "Login", href: "/auth/login", icon: User },
   { label: "Register", href: "/auth/signup", icon: User },
 ]
@@ -111,8 +111,16 @@ export function SiteHeader() {
   const [settings, setSettings] = useState<SocialSettings>({})
   const { t } = useI18n()
   const { user } = useAuth()
+  const { count } = useCart()
   const isAuth = !!user
   const photoUrl = user?.profilePhoto || null
+
+  const profileTarget =
+    user?.role === "admin"
+      ? "/admin"
+      : user?.role === "agent" || user?.role === "owner" || user?.role === "worker"
+        ? "/agent"
+        : "/orders"
 
   useEffect(() => {
     let active = true
@@ -127,7 +135,7 @@ export function SiteHeader() {
     }
   }, [])
 
-  const contactEmail = settings.contactEmail || "info@dawolife.jebugeneraltrading.com"
+  const contactEmail = settings.contactEmail || "hello@hachaluprotocol.com"
   const contactPhone = settings.contactPhone1 || ""
 
   const topSocials = [
@@ -194,7 +202,7 @@ export function SiteHeader() {
           <span className="text-secondary-foreground/30">|</span>
           <LanguageDropdown className="hidden sm:block" />
           {isAuth ? (
-            <Link href={user.role === "admin" ? "/admin" : user.role === "agent" || user.role === "owner" ? "/agent" : "/verify"} className="flex items-center gap-2 hover:opacity-80 transition">
+            <Link href={profileTarget} className="flex items-center gap-2 hover:opacity-80 transition">
               {photoUrl ? (
                 <div className="h-5 w-5 rounded-full overflow-hidden bg-primary/10 ring-2 ring-primary/30">
                   <Image src={photoUrl} alt={user.name || "Profile"} width={20} height={20} className="h-full w-full object-contain" />
@@ -272,8 +280,20 @@ export function SiteHeader() {
           </nav>
 
           <div className="flex items-center gap-2">
+            <Link
+              href="/cart"
+              className="relative inline-flex h-10 w-10 items-center justify-center rounded-lg text-foreground transition hover:bg-muted"
+              aria-label="Cart"
+            >
+              <ShoppingBag className="h-5 w-5" />
+              {count > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                  {count > 99 ? "99+" : count}
+                </span>
+              )}
+            </Link>
             {isAuth && (
-              <Link href={user.role === "admin" ? "/admin" : user.role === "agent" || user.role === "owner" ? "/agent" : "/verify"} className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-primary/5 border border-primary/20 hover:bg-primary/10 transition text-sm font-medium text-primary">
+              <Link href={profileTarget} className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-primary/5 border border-primary/20 hover:bg-primary/10 transition text-sm font-medium text-primary">
                 {photoUrl ? (
                   <div className="h-7 w-7 rounded-full overflow-hidden bg-primary/10">
                     <Image src={photoUrl} alt={user.name || "Profile"} width={28} height={28} className="h-full w-full object-contain" />
@@ -322,7 +342,7 @@ export function SiteHeader() {
               <div className="mt-2 border-t border-border pt-2 flex flex-col gap-1">
                 {isAuth ? (
                   <Link
-                    href={user.role === "admin" ? "/admin" : user.role === "agent" || user.role === "owner" ? "/agent" : "/verify"}
+                    href={profileTarget}
                     onClick={() => setOpen(false)}
                     className="rounded-lg px-3 py-3 text-sm font-semibold text-primary hover:bg-muted min-h-[44px] flex items-center gap-2"
                   >

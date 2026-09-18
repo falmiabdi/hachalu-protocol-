@@ -1,12 +1,11 @@
 import { Router } from 'express'
 import { authMiddleware } from '../middleware/auth.js'
 import { prisma } from '../lib/prisma.js'
-import { SavedItemType } from '@prisma/client'
 import { isValidUuid } from '../utils/validation.js'
 
 const router = Router()
 
-const agentSelect = { id: true, username: true, email: true, phone: true, profilePhoto: true }
+const sellerSelect = { id: true, username: true, email: true, phone: true, profilePhoto: true }
 
 router.get('/', authMiddleware, async (req, res) => {
   try {
@@ -17,29 +16,25 @@ router.get('/', authMiddleware, async (req, res) => {
 
     const items = []
     for (const row of saved) {
-      const { itemType, itemId } = row
-      let item: any = null
+      const item: any = await prisma.product.findUnique({
+        where: { id: row.itemId },
+        include: {
+          seller: { select: sellerSelect },
+          category: { select: { id: true, name: true, slug: true } },
+        },
+      })
 
-      if (itemType === 'property') {
-        item = await prisma.property.findUnique({
-          where: { id: itemId },
-          include: { agent: { select: agentSelect } },
-        })
-      } else if (itemType === 'vehicle') {
-        item = await prisma.vehicle.findUnique({
-          where: { id: itemId },
-          include: { agent: { select: agentSelect } },
-        })
+      if (!item) {
+        await prisma.savedItem.deleteMany({ where: { id: row.id } }).catch(() => {})
+        continue
       }
 
-      if (!item) continue
-
       const { status } = item
-      if (status && status !== 'Approved') continue
+      if (!['Approved', 'OutOfStock'].includes(status)) continue
 
       items.push({
-        itemType,
-        itemId,
+        itemType: row.itemType,
+        itemId: row.itemId,
         savedAt: row.createdAt,
         item,
       })
@@ -51,18 +46,17 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 })
 
-
 router.get('/status', authMiddleware, async (req, res) => {
   try {
-    const { itemType, itemId } = req.query
-    if (!itemType || !itemId) {
-      return res.status(400).json({ message: 'Missing itemType or itemId' })
+    const { itemId } = req.query
+    if (!itemId) {
+      return res.status(400).json({ message: 'Missing itemId' })
     }
     const exists = await prisma.savedItem.findUnique({
       where: {
         userId_itemType_itemId: {
           userId: req.user!.userId,
-          itemType: String(itemType) as SavedItemType,
+          itemType: 'product',
           itemId: String(itemId),
         },
       },
@@ -73,12 +67,11 @@ router.get('/status', authMiddleware, async (req, res) => {
   }
 })
 
-
 router.post('/', authMiddleware, async (req, res) => {
   try {
     const { itemType, itemId } = req.body
-    if (!['property', 'vehicle'].includes(itemType)) {
-      return res.status(400).json({ message: 'itemType must be "property" or "vehicle"' })
+    if (itemType !== 'product') {
+      return res.status(400).json({ message: 'itemType must be "product"' })
     }
     if (!itemId) {
       return res.status(400).json({ message: 'itemId is required' })
@@ -87,20 +80,14 @@ router.post('/', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'itemId must be a valid id' })
     }
 
-    const item: any =
-      itemType === 'property'
-        ? await prisma.property.findUnique({ where: { id: itemId } })
-        : await prisma.vehicle.findUnique({ where: { id: itemId } })
-
-    if (!item) {
-      return res.status(404).json({ message: 'Item not found' })
+    const product: any = await prisma.product.findUnique({ where: { id: itemId } })
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' })
     }
 
     const userId = req.user!.userId
-    const typedItemType = itemType as SavedItemType
-
     const existing = await prisma.savedItem.findUnique({
-      where: { userId_itemType_itemId: { userId, itemType: typedItemType, itemId } },
+      where: { userId_itemType_itemId: { userId, itemType: 'product', itemId } },
     })
 
     let savedItem
@@ -108,12 +95,9 @@ router.post('/', authMiddleware, async (req, res) => {
       savedItem = existing
     } else {
       savedItem = await prisma.savedItem.create({
-        data: { userId, itemType: typedItemType, itemId },
+        data: { userId, itemType: 'product', itemId },
       })
-      if (itemType === 'vehicle') {
-        const favorites = Number(item.favorites || 0)
-        await prisma.vehicle.update({ where: { id: itemId }, data: { favorites: favorites + 1 } })
-      }
+      await prisma.product.update({ where: { id: itemId }, data: { favorites: { increment: 1 } } })
     }
 
     res.status(201).json({ message: 'Item saved', saved: true, savedItem })
@@ -122,26 +106,25 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 })
 
-
 router.delete('/', authMiddleware, async (req, res) => {
   try {
     const { itemType, itemId } = req.body
-    if (!itemType || !itemId) {
-      return res.status(400).json({ message: 'Missing itemType or itemId' })
+    if (itemType !== 'product' || !itemId) {
+      return res.status(400).json({ message: 'product itemType and itemId are required' })
     }
     if (!isValidUuid(itemId)) {
       return res.status(400).json({ message: 'itemId must be a valid id' })
     }
 
     const deleted = await prisma.savedItem.deleteMany({
-      where: { userId: req.user!.userId, itemType: itemType as SavedItemType, itemId },
+      where: { userId: req.user!.userId, itemType: 'product', itemId },
     })
 
-    if (deleted.count > 0 && itemType === 'vehicle') {
-      const item: any = await prisma.vehicle.findUnique({ where: { id: itemId } })
-      if (item) {
-        const favorites = Number(item.favorites || 0)
-        await prisma.vehicle.update({ where: { id: itemId }, data: { favorites: Math.max(0, favorites - 1) } })
+    if (deleted.count > 0) {
+      const product: any = await prisma.product.findUnique({ where: { id: itemId } })
+      if (product) {
+        const favorites = Number(product.favorites || 0)
+        await prisma.product.update({ where: { id: itemId }, data: { favorites: Math.max(0, favorites - 1) } })
       }
     }
 

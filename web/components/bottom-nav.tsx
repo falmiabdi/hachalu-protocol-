@@ -1,12 +1,12 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { motion } from "framer-motion"
-import { Home, Bookmark, Tag, MessageCircle, User } from "lucide-react"
+import { Home, ShoppingBag, Package, Tag, User } from "lucide-react"
 import { useAuth } from "@/components/auth/auth-guard"
-import { getApiUrl } from "@/lib/get-api-url"
+import { useCart } from "@/lib/cart"
 import { cn } from "@/lib/utils"
 
 const SCROLL_THRESHOLD = 10
@@ -21,13 +21,13 @@ interface NavItem {
   href?: string
   action?: () => void
   match?: (pathname: string) => boolean
+  badge?: number
 }
 
 export function BottomNav() {
   const pathname = usePathname()
-  const router = useRouter()
-  const { user, isLoggedIn, isVerified, getToken } = useAuth()
-  const [unread, setUnread] = useState(0)
+  const { user } = useAuth()
+  const { count } = useCart()
   const [navHidden, setNavHidden] = useState(false)
   const lastScrollY = useRef(0)
   const ticking = useRef(false)
@@ -69,77 +69,27 @@ export function BottomNav() {
     return () => window.removeEventListener("scroll", onScroll)
   }, [hidden])
 
-  useEffect(() => {
-    if (hidden || !user) {
-      setUnread(0)
-      return
-    }
-
-    let cancelled = false
-
-    const loadUnread = async () => {
-      try {
-        const token = await getToken()
-        if (!token) return
-        const res = await fetch(`${getApiUrl()}/api/messages/unread`, {
-          headers: { Authorization: `Bearer ${token}` },
-          credentials: "include",
-        })
-        if (cancelled) return
-        if (res.ok) {
-          const data = await res.json()
-          setUnread(data.count || 0)
-        } else {
-          setUnread(0)
-        }
-      } catch {
-        if (!cancelled) setUnread(0)
-      }
-    }
-
-    loadUnread()
-    const interval = setInterval(loadUnread, 30000)
-    return () => {
-      cancelled = true
-      clearInterval(interval)
-    }
-  }, [hidden, user, getToken])
-
   if (hidden) return null
 
-  const profileHref = !user ? "/auth/login" : user.role === "admin" ? "/admin" : user.role === "agent" || user.role === "owner" ? "/agent" : "/verify"
+  const profileHref = !user
+    ? "/auth/login"
+    : user.role === "admin"
+      ? "/admin"
+      : user.role === "agent" || user.role === "owner" || user.role === "worker"
+        ? "/agent"
+        : "/orders"
 
   const items: NavItem[] = [
     { label: "Home", href: "/", icon: Home, match: (p) => p === "/" },
+    { label: "Shop", href: "/products", icon: Tag, match: (p) => p.startsWith("/products") },
+    { label: "Cart", href: "/cart", icon: ShoppingBag, match: (p) => p.startsWith("/cart") || p.startsWith("/checkout"), badge: count },
     {
-      label: "Saved",
-      icon: Bookmark,
-      match: (p) => p.startsWith("/saved"),
-      action: () => {
-        if (!isLoggedIn) router.push("/auth/signup")
-        else router.push("/saved")
-      },
+      label: "Orders",
+      href: "/orders",
+      icon: Package,
+      match: (p) => p.startsWith("/orders"),
     },
-    {
-      label: "Sell",
-      icon: Tag,
-      match: (p) => p.startsWith("/sell") || p.startsWith("/post"),
-      action: () => {
-        if (!user) router.push("/auth/login")
-        else if (!isVerified) router.push("/verify")
-        else router.push("/sell")
-      },
-    },
-    {
-      label: "Messages",
-      icon: MessageCircle,
-      match: (p) => p.startsWith("/messages") || p.startsWith("/agent/messages"),
-      action: () => {
-        if (!isLoggedIn) router.push("/auth/login")
-        else router.push("/messages")
-      },
-    },
-    { label: "Profile", href: profileHref, icon: User, match: (p) => p.startsWith("/verify") || p.startsWith("/admin") || p.startsWith("/agent") || p.startsWith("/account") },
+    { label: "Profile", href: profileHref, icon: User, match: (p) => p.startsWith("/verify") || p.startsWith("/admin") || p.startsWith("/agent") || p.startsWith("/account") || p.startsWith("/orders") },
   ]
 
   return (
@@ -170,9 +120,9 @@ export function BottomNav() {
                     className={cn("h-6 w-6 transition-colors", active ? "text-primary" : "text-muted-foreground")}
                     strokeWidth={active ? 2.2 : 1.8}
                   />
-                  {item.label === "Messages" && unread > 0 && (
-                    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white">
-                      {unread > 99 ? "99+" : unread}
+                  {item.badge && item.badge > 0 && (
+                    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold leading-none text-white">
+                      {item.badge > 99 ? "99+" : item.badge}
                     </span>
                   )}
                 </span>
@@ -200,6 +150,11 @@ export function BottomNav() {
                   className={cn("h-6 w-6 transition-colors", active ? "text-primary" : "text-muted-foreground")}
                   strokeWidth={active ? 2.2 : 1.8}
                 />
+                {item.badge && item.badge > 0 && (
+                  <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold leading-none text-white">
+                    {item.badge > 99 ? "99+" : item.badge}
+                  </span>
+                )}
               </span>
               <span
                 className={cn(

@@ -29,6 +29,7 @@ function databaseUrl(): string {
 
 export const prisma = new PrismaClient({
   datasources: { db: { url: databaseUrl() } },
+  transactionOptions: { maxWait: 10000, timeout: 20000 },
   log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
 })
 

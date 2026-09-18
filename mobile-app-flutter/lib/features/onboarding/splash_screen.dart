@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/theme/app_colors.dart';
+import '../../core/config/app_config.dart';
 import 'onboarding_gate.dart';
 
 
@@ -55,22 +57,42 @@ class _SplashScreenState extends State<SplashScreen>
           opacity: fade,
           child: Column(
             children: [
-              const SizedBox(height: 48),
-              Image.asset(
-                'assets/images/louncher_icon.png',
-                height: 120,
-                fit: BoxFit.contain,
-                errorBuilder: (_, _, _) => const SizedBox(height: 120),
-              ),
               Expanded(
-                child: ScaleTransition(
-                  scale: Tween<double>(begin: 0.94, end: 1.0).animate(fade),
+                child: Center(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
-                    child: Image.asset(
-                      'assets/images/louncher_icon.png',
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 96,
+                          height: 96,
+                          decoration: BoxDecoration(
+                            color: AppColors.primarySoft,
+                            borderRadius: BorderRadius.circular(AppColors.radius),
+                          ),
+                          child: Icon(Icons.checkroom, size: 52, color: AppColors.primary),
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          AppConfig.appName,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.foreground,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          AppConfig.appTagline,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),

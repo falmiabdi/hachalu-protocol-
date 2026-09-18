@@ -5,9 +5,6 @@ import { isValidUuid } from '../utils/validation.js'
 
 const router = Router()
 
-
-
-
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const userId = req.user!.userId
@@ -18,13 +15,13 @@ router.get('/', authMiddleware, async (req, res) => {
 
     let where: any = {}
     if (!isAdmin) {
-      const ownedPropertyIds = await prisma.property
-        .findMany({ where: { agentId: userId }, select: { id: true } })
+      const sellerOrderIds = await prisma.order
+        .findMany({ where: { sellerId: userId }, select: { id: true } })
         .then((rows) => rows.map((r) => r.id))
 
       const orClauses: any[] = []
-      if (ownedPropertyIds.length > 0) {
-        orClauses.push({ propertyId: { in: ownedPropertyIds } })
+      if (sellerOrderIds.length > 0) {
+        orClauses.push({ orderId: { in: sellerOrderIds } })
       }
       orClauses.push({ buyerEmail: req.user!.email })
       where = { OR: orClauses }
@@ -43,6 +40,20 @@ router.get('/', authMiddleware, async (req, res) => {
         take: limit,
       }),
     ])
+
+    if (!isAdmin && payments.length > 0) {
+      const orderIds = [...new Set(payments.map((p) => p.orderId))]
+      const orders = await prisma.order.findMany({
+        where: { id: { in: orderIds } },
+        select: { id: true, orderNumber: true, status: true },
+      })
+      const orderMap = new Map(orders.map((o) => [o.id, o]))
+      ;(payments as any).forEach((p: any) => {
+        const o = orderMap.get(p.orderId)
+        p.orderNumber = o?.orderNumber || null
+        p.orderStatus = o?.status || null
+      })
+    }
 
     const [completedAgg, pendingCount, failedCount] = await Promise.all([
       prisma.payment.aggregate({
@@ -72,7 +83,6 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 })
 
-
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
     if (!isValidUuid(req.params.id)) {
@@ -85,14 +95,18 @@ router.get('/:id', authMiddleware, async (req, res) => {
 
     const isAdmin = req.user!.role === 'admin'
     const isBuyer = payment.buyerEmail === req.user!.email
-    const isOwner = await prisma.property.count({
-      where: { id: payment.propertyId || '00000000-0000-0000-0000-000000000000', agentId: req.user!.userId },
+
+    const order = await prisma.order.findFirst({
+      where: { id: payment.orderId },
+      select: { id: true, sellerId: true, orderNumber: true, status: true },
     })
-    if (!isAdmin && !isBuyer && !isOwner) {
+    const isSeller = order?.sellerId === req.user!.userId
+
+    if (!isAdmin && !isBuyer && !isSeller) {
       return res.status(403).json({ message: 'Not authorized' })
     }
 
-    res.json({ payment })
+    res.json({ payment, order: order || null })
   } catch (err: any) {
     res.status(500).json({ message: err.message || 'Failed to fetch payment' })
   }

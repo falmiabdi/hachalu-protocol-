@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { v4 as uuidv4 } from 'uuid'
+import { createAndBroadcastNotification } from '../utils/notifications.js'
 
 const router = Router()
 
@@ -18,28 +19,26 @@ function isNotifyAuthorized(req: any): boolean {
   return header === secret
 }
 
-
 router.post('/create-order', async (req, res) => {
   try {
-    const { title, amount, propertyId, propertyTitle, paymentType } = req.body
+    const { orderId, amount, paymentType } = req.body
 
-    if (!title || !amount) {
-      return res.status(400).json({ message: 'Missing title or amount' })
+    if (!orderId || !amount) {
+      return res.status(400).json({ message: 'Missing orderId or amount' })
     }
 
-    const paymentTypeVal = paymentType || 'service_charge'
-
-    
-    const completed = await prisma.payment.findFirst({
-      where: { propertyId: propertyId || null, status: 'Completed', method: 'telebirr' },
-    })
-    if (completed) {
-      return res.status(409).json({ message: 'Payment already completed for this item' })
+    const order = await prisma.order.findUnique({ where: { id: orderId } })
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' })
     }
-    const existing = await prisma.payment.findFirst({
-      where: { propertyId: propertyId || null, status: 'Pending', method: 'telebirr', paymentType: paymentTypeVal },
-    })
-    if (existing) {
+
+    const paymentTypeVal = paymentType || 'order_payment'
+
+    const existing = await prisma.payment.findUnique({ where: { orderId } })
+    if (existing && existing.status === 'Completed') {
+      return res.status(409).json({ message: 'Payment already completed for this order' })
+    }
+    if (existing && existing.status === 'Pending') {
       return res.json({
         toPayUrl: `https://app.ethiotelebirr.et/payment/h5/?merch_order_id=${existing.merchOrderId}`,
         merchOrderId: existing.merchOrderId,
@@ -49,36 +48,49 @@ router.post('/create-order', async (req, res) => {
     }
 
     const merchOrderId = `TB-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
-    const orderId = uuidv4()
-    const toPayUrl = `https://app.ethiotelebirr.et/payment/h5/?merch_order_id=${merchOrderId}`
 
-    
-    await prisma.payment.create({
-      data: {
-        id: orderId,
-        orderId,
-        merchOrderId,
-        txRef: merchOrderId,
-        status: 'Pending',
-        amount: Number(amount),
-        currency: 'ETB',
-        method: 'telebirr',
-        paymentType: paymentTypeVal,
-        buyerName: 'TeleBirr User',
-        buyerEmail: 'customer@telebirr.et',
-        buyerPhone: '0900000000',
-        propertyId: propertyId || null,
-        propertyTitle: propertyTitle || title,
-      },
+    let payment
+    if (existing && existing.status === 'Failed') {
+      payment = await prisma.payment.update({
+        where: { id: existing.id },
+        data: {
+          status: 'Pending',
+          merchOrderId,
+          txRef: merchOrderId,
+          amount: Number(amount),
+          currency: 'ETB',
+          paymentType: paymentTypeVal,
+        } as any,
+      })
+    } else {
+      payment = await prisma.payment.create({
+        data: {
+          orderId,
+          merchOrderId,
+          txRef: merchOrderId,
+          status: 'Pending',
+          amount: Number(amount),
+          currency: 'ETB',
+          method: 'telebirr',
+          paymentType: paymentTypeVal,
+          buyerName: 'TeleBirr User',
+          buyerEmail: 'customer@telebirr.et',
+          buyerPhone: '0900000000',
+          orderTitle: `Order ${order.orderNumber}`,
+        },
+      })
+    }
+
+    res.json({
+      toPayUrl: `https://app.ethiotelebirr.et/payment/h5/?merch_order_id=${payment.merchOrderId}`,
+      merchOrderId: payment.merchOrderId,
+      orderId: payment.orderId,
     })
-
-    res.json({ toPayUrl, merchOrderId, orderId })
   } catch (err: any) {
     console.error('[TeleBirr Create Order Error]', err)
     res.status(500).json({ message: err.message || 'Failed to create order' })
   }
 })
-
 
 router.get('/status', async (req, res) => {
   try {
@@ -93,12 +105,12 @@ router.get('/status', async (req, res) => {
       merchOrderId: payment.merchOrderId,
       amount: payment.amount,
       method: payment.method,
+      orderId: payment.orderId,
     })
   } catch (err: any) {
     res.status(500).json({ message: err.message || 'Status check failed' })
   }
 })
-
 
 router.post('/notify', async (req, res) => {
   try {
@@ -113,6 +125,23 @@ router.post('/notify', async (req, res) => {
     if (payment) {
       const newStatus = status === 'success' || status === 'SUCCESS' ? 'Completed' : 'Failed'
       await prisma.payment.update({ where: { id: payment.id }, data: { status: newStatus } })
+
+      if (newStatus === 'Completed') {
+        const order = await prisma.order.findUnique({ where: { id: payment.orderId } })
+        if (order && order.status === 'PendingPayment') {
+          await prisma.order.update({
+            where: { id: order.id },
+            data: { status: 'Paid', paymentStatus: 'Completed' },
+          })
+          createAndBroadcastNotification(
+            order.customerId,
+            'Payment Received',
+            `Payment for order ${order.orderNumber} (${payment.amount} ETB) via TeleBirr was successful.`,
+            'success',
+            { orderId: order.id }
+          ).catch(() => {})
+        }
+      }
     }
 
     res.json({ message: 'Notification received' })

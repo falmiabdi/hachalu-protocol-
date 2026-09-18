@@ -17,8 +17,10 @@ import 'data/repositories/listing_repository.dart';
 import 'data/repositories/message_repository.dart';
 import 'data/repositories/notification_repository.dart';
 import 'data/repositories/review_repository.dart';
+import 'data/repositories/hachalu_repository.dart';
 import 'features/onboarding/splash_screen.dart';
 import 'providers/auth_provider.dart';
+import 'providers/cart_provider.dart';
 import 'providers/home_provider.dart';
 import 'providers/language_provider.dart';
 import 'providers/saved_provider.dart';
@@ -73,6 +75,8 @@ Future<void> main() async {
         ChangeNotifierProvider.value(value: auth),
         ChangeNotifierProvider(create: (_) => HomeProvider(listingRepo)),
         ChangeNotifierProvider(create: (_) => SavedProvider(listingRepo)),
+        ChangeNotifierProvider(create: (_) => CartProvider(prefs)..load()),
+        Provider<HachaluRepository>(create: (_) => HachaluRepository(api)),
         Provider.value(value: listingRepo),
         Provider.value(value: MessageRepository(api)),
         Provider.value(value: ReviewRepository(api)),
@@ -82,26 +86,24 @@ Future<void> main() async {
         Provider.value(value: ws),
         Provider.value(value: api),
       ],
-      child: DawoLifeApp(prefs: prefs),
+      child: HachaluApp(prefs: prefs),
     ),
   );
 }
 
-class DawoLifeApp extends StatefulWidget {
-  const DawoLifeApp({super.key, required this.prefs});
+class HachaluApp extends StatefulWidget {
+  const HachaluApp({super.key, required this.prefs});
 
   final SharedPreferences prefs;
 
   @override
-  State<DawoLifeApp> createState() => _DawoLifeAppState();
+  State<HachaluApp> createState() => _HachaluAppState();
 }
 
-class _DawoLifeAppState extends State<DawoLifeApp> {
+class _HachaluAppState extends State<HachaluApp> {
   @override
   void initState() {
     super.initState();
-    
-    
     WidgetsBinding.instance.addPostFrameCallback((_) {
       PushNotificationService.instance.maybeOpenPending();
     });
@@ -110,7 +112,7 @@ class _DawoLifeAppState extends State<DawoLifeApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'DawoLife',
+      title: 'Hachalu Protocol',
       debugShowCheckedModeBanner: false,
       navigatorKey: appNavigatorKey,
       theme: AppTheme.light,

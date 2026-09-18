@@ -6,7 +6,6 @@ import { isValidUuid } from '../utils/validation.js'
 
 const router = Router()
 
-
 router.get('/unread', authMiddleware, async (req, res) => {
   try {
     const count = await prisma.message.count({
@@ -18,7 +17,6 @@ router.get('/unread', authMiddleware, async (req, res) => {
   }
 })
 
-
 router.get('/inbox', authMiddleware, async (req, res) => {
   try {
     const userId = req.user!.userId
@@ -29,15 +27,15 @@ router.get('/inbox', authMiddleware, async (req, res) => {
       orderBy: { createdAt: 'desc' },
     })
 
-    const propertyIds = [...new Set(messages.map((m) => m.propertyId))]
-    const properties: Record<string, string> = {}
-    if (propertyIds.length > 0) {
-      const rows = await prisma.property.findMany({
-        where: { id: { in: propertyIds } },
-        select: { id: true, title: true },
+    const productIds = [...new Set(messages.map((m) => m.productId))]
+    const products: Record<string, string> = {}
+    if (productIds.length > 0) {
+      const rows = await prisma.product.findMany({
+        where: { id: { in: productIds } },
+        select: { id: true, name: true },
       })
       for (const row of rows) {
-        properties[row.id] = row.title
+        products[row.id] = row.name
       }
     }
 
@@ -63,8 +61,8 @@ router.get('/inbox', authMiddleware, async (req, res) => {
 
     const serialized = messages.map((m) => ({
       id: m.id,
-      propertyId: m.propertyId,
-      propertyTitle: properties[m.propertyId] || 'Listing',
+      productId: m.productId,
+      productTitle: products[m.productId] || 'Product',
       senderId: m.senderId,
       senderName: m.senderName,
       senderRole: m.senderRole,
@@ -81,13 +79,12 @@ router.get('/inbox', authMiddleware, async (req, res) => {
   }
 })
 
-
-router.get('/:propertyId', authMiddleware, async (req, res) => {
+router.get('/:productId', authMiddleware, async (req, res) => {
   try {
     const userId = req.user!.userId
     const messages = await prisma.message.findMany({
       where: {
-        propertyId: req.params.propertyId,
+        productId: req.params.productId,
         OR: [{ senderId: userId }, { recipientId: userId }],
       },
       orderBy: { createdAt: 'asc' },
@@ -98,17 +95,24 @@ router.get('/:propertyId', authMiddleware, async (req, res) => {
   }
 })
 
-
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { propertyId, recipientId, content } = req.body
+    const { productId, recipientId, content } = req.body
 
-    if (!propertyId || !recipientId || !content) {
+    if (!productId || !recipientId || !content) {
       return res.status(400).json({ message: 'Missing required fields' })
     }
 
     if (recipientId === req.user!.userId) {
       return res.status(400).json({ message: 'You cannot message yourself' })
+    }
+
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { id: true, sellerId: true, contactMode: true, contactUserId: true },
+    })
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' })
     }
 
     const recipient = await prisma.user.findUnique({
@@ -126,7 +130,7 @@ router.post('/', authMiddleware, async (req, res) => {
 
     const msgDoc = await prisma.message.create({
       data: {
-        propertyId,
+        productId,
         senderId: req.user!.userId,
         senderName: sender?.username ?? req.user!.email,
         senderRole: req.user!.role,
@@ -143,7 +147,6 @@ router.post('/', authMiddleware, async (req, res) => {
     res.status(500).json({ message: err.message || 'Failed to send message' })
   }
 })
-
 
 router.patch('/:id/read', authMiddleware, async (req, res) => {
   try {

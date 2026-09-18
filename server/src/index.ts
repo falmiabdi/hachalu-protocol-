@@ -5,13 +5,14 @@ import { connectDB, prisma } from './utils/db.js'
 import { withPrismaRetry, startKeepAlive } from './lib/prisma.js'
 import { ensureRootAdmin } from './bootstrap.js'
 import authRoutes from './routes/auth.js'
-import propertyRoutes from './routes/properties.js'
+import productRoutes from './routes/products.js'
+import catalogRoutes from './routes/catalog.js'
+import orderRoutes from './routes/orders.js'
 import paymentRoutes from './routes/payments.js'
 import uploadRoutes from './routes/upload.js'
 import messageRoutes from './routes/messages.js'
 import notificationRoutes from './routes/notifications.js'
 import adminRoutes from './routes/admin.js'
-import vehicleRoutes from './routes/vehicles.js'
 import agentRoutes from './routes/agent.js'
 import favoriteRoutes from './routes/favorites.js'
 import chapaRoutes from './routes/chapa.js'
@@ -23,6 +24,11 @@ import contactRoutes from './routes/contact.js'
 import reviewRoutes from './routes/reviews.js'
 import statsRoutes from './routes/stats.js'
 import permissionRoutes from './routes/permissions.js'
+import measurementRoutes from './routes/measurements.js'
+import productionRoutes from './routes/production.js'
+import workerRoutes from './routes/workers.js'
+import inventoryRoutes from './routes/inventory.js'
+import commissionRoutes from './routes/commissions.js'
 import { startNotificationCleanup } from './routes/notifications.js'
 import { setupWebSocket } from './ws/server.js'
 import { errorHandler, notFoundHandler } from './middleware/error.js'
@@ -93,13 +99,14 @@ app.use(express.urlencoded({ extended: true }))
 
 
 app.use('/api/auth', authRoutes)
-app.use('/api/properties', propertyRoutes)
+app.use('/api/products', productRoutes)
+app.use('/api/catalog', catalogRoutes)
+app.use('/api/orders', orderRoutes)
 app.use('/api/payments', paymentRoutes)
 app.use('/api/upload', uploadRoutes)
 app.use('/api/messages', messageRoutes)
 app.use('/api/notifications', notificationRoutes)
 app.use('/api/admin', adminRoutes)
-app.use('/api/vehicles', vehicleRoutes)
 app.use('/api/agent', agentRoutes)
 app.use('/api/favorites', favoriteRoutes)
 app.use('/api/chapa', chapaRoutes)
@@ -111,24 +118,33 @@ app.use('/api/contact', contactRoutes)
 app.use('/api/reviews', reviewRoutes)
 app.use('/api/stats', statsRoutes)
 app.use('/api/permissions', permissionRoutes)
+app.use('/api/measurements', measurementRoutes)
+app.use('/api/production', productionRoutes)
+app.use('/api/workers', workerRoutes)
+app.use('/api/inventory', inventoryRoutes)
+app.use('/api/commissions', commissionRoutes)
 
 
 app.get('/', (_req, res) => {
   res.json({
-    name: 'DawoLife API',
+    name: 'Hachalu Protocol API',
     version: '1.0.0',
     status: 'running',
     endpoints: {
       health: '/api/health',
       auth: '/api/auth/*',
-      properties: '/api/properties',
-      vehicles: '/api/vehicles',
-      messages: '/api/messages',
-      notifications: '/api/notifications',
+      products: '/api/products',
+      catalog: '/api/catalog/*',
+      orders: '/api/orders',
       payments: '/api/payments',
       chapa: '/api/chapa/*',
       telebirr: '/api/telebirr/*',
-      agent: '/api/agent/*',
+      measurements: '/api/measurements',
+      production: '/api/production/*',
+      workers: '/api/workers/*',
+      inventory: '/api/inventory/*',
+      commissions: '/api/commissions',
+      agents: '/api/agent/*',
       admin: '/api/admin/*',
       favorites: '/api/favorites',
       upload: '/api/upload',
@@ -181,7 +197,7 @@ async function start() {
         configured: isResendConfigured(),
         apiKey: process.env.RESEND_API_KEY ? mask(process.env.RESEND_API_KEY) : '(unset)',
         fromEmail: process.env.RESEND_FROM_EMAIL || '(unset)',
-        fromName: process.env.RESEND_FROM_NAME || 'DawoLife',
+        fromName: process.env.RESEND_FROM_NAME || 'Hachalu',
       },
       baseUrl: process.env.BASE_URL || '(unset → http://localhost:4000)',
       frontendUrl: process.env.FRONTEND_URL || '(unset)',
@@ -193,7 +209,7 @@ async function start() {
   app.use(errorHandler)
 
   const server = app.listen(PORT, () => {
-    console.log(`DawoLife API server running on port ${PORT} ✅`)
+    console.log(`Hachalu Protocol API server running on port ${PORT} ✅`)
 
     if (isResendConfigured()) {
       console.log('Email transport: Resend API ✅')

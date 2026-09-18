@@ -8,15 +8,7 @@ import { isValidUuid } from '../utils/validation.js'
 const router = Router()
 
 export type PermissionAction = 'EDIT' | 'DELETE'
-export type PermissionEntity = 'PROPERTY' | 'VEHICLE'
-
-
-
-
-
-
-
-
+export type PermissionEntity = 'PRODUCT' | 'ORDER'
 
 export async function assertListingPermissionAllowed(opts: {
   requesterId: string
@@ -29,9 +21,7 @@ export async function assertListingPermissionAllowed(opts: {
   if (opts.isAdmin || opts.listingStatus !== 'Approved') {
     return { allowed: true }
   }
-  
-  
-  
+
   return withPrismaRetry(async () => {
     const request = await prisma.permissionRequest.findFirst({
       where: {
@@ -52,13 +42,11 @@ export async function assertListingPermissionAllowed(opts: {
 }
 
 const createSchema = z.object({
-  entityType: z.enum(['PROPERTY', 'VEHICLE']),
+  entityType: z.enum(['PRODUCT', 'ORDER']),
   entityId: z.string(),
   type: z.enum(['EDIT', 'DELETE']),
   reason: z.string().max(500).optional(),
 })
-
-
 
 router.post('/', authMiddleware, agentMiddleware, async (req, res) => {
   try {
@@ -70,10 +58,14 @@ router.post('/', authMiddleware, agentMiddleware, async (req, res) => {
     const requesterId = req.user!.userId
 
     const listing =
-      entityType === 'PROPERTY'
-        ? await withPrismaRetry(() => prisma.property.findUnique({ where: { id: entityId } }))
-        : await withPrismaRetry(() => prisma.vehicle.findUnique({ where: { id: entityId } }))
-    if (!listing || listing.agentId !== requesterId) {
+      entityType === 'PRODUCT'
+        ? await withPrismaRetry(() => prisma.product.findUnique({ where: { id: entityId } }))
+        : await withPrismaRetry(() => prisma.order.findUnique({ where: { id: entityId } }))
+    if (!listing) {
+      return res.status(404).json({ message: 'Listing not found' })
+    }
+    const ownerId = entityType === 'PRODUCT' ? (listing as any).sellerId : (listing as any).sellerId
+    if (ownerId !== requesterId) {
       return res.status(403).json({ message: 'Not authorized' })
     }
 
@@ -101,7 +93,7 @@ router.post('/', authMiddleware, agentMiddleware, async (req, res) => {
 
     notifyAdmins(
       'Permission Request',
-      `A seller requests permission to ${type === 'EDIT' ? 'edit' : 'delete'} a ${entityType === 'PROPERTY' ? 'property' : 'vehicle'}.`,
+      `A seller requests permission to ${type === 'EDIT' ? 'edit' : 'delete'} a ${entityType === 'PRODUCT' ? 'product' : 'order'}.`,
       'info',
       { entityType: 'PERMISSION', entityId: request.created!.id, permissionId: request.created!.id, listingType: entityType, listingId: entityId, requestType: type }
     ).catch(() => {})
@@ -111,7 +103,6 @@ router.post('/', authMiddleware, agentMiddleware, async (req, res) => {
     res.status(500).json({ message: err.message || 'Failed to request permission' })
   }
 })
-
 
 router.get('/admin', authMiddleware, adminMiddleware, async (req, res) => {
   try {
@@ -129,7 +120,6 @@ router.get('/admin', authMiddleware, adminMiddleware, async (req, res) => {
     res.status(500).json({ message: err.message || 'Failed to fetch permission requests' })
   }
 })
-
 
 router.get('/mine', authMiddleware, async (req, res) => {
   try {
@@ -150,16 +140,13 @@ router.get('/mine', authMiddleware, async (req, res) => {
   }
 })
 
-
 router.patch('/:id/decide', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     if (!isValidUuid(req.params.id)) {
       return res.status(404).json({ message: 'Request not found' })
     }
     const approve = req.body.approve === true
-    
-    
-    
+
     const updated = await withPrismaRetry(async () => {
       const request = await prisma.permissionRequest.findUnique({ where: { id: req.params.id } })
       if (!request) {

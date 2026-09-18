@@ -1,56 +1,46 @@
 ﻿"use client"
 
-import { getApiUrl } from '@/lib/get-api-url'
-
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
 import { useAuth } from "@/components/auth/auth-guard"
-import { useI18n } from "@/lib/i18n"
-
 import {
   LayoutDashboard,
+  Scissors,
+  ShoppingBag,
+  Boxes,
+  Truck,
   User,
-  Building2,
-  PlusCircle,
-  MessageSquare,
-  Bell,
   CreditCard,
   Settings,
   LogOut,
+  Hammer,
+  Users,
   Home,
-  Car,
   X,
-  Megaphone,
-  ShieldCheck,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-const agentNav = [
-  { href: "/agent", labelKey: "dashboard", icon: LayoutDashboard },
-  { href: "/agent/profile", labelKey: "profile", icon: User },
-  { href: "/agent/properties", labelKey: "my_properties", icon: Building2 },
-  { href: "/agent/post", labelKey: "post_property", icon: PlusCircle },
-  { href: "/agent/vehicles", labelKey: "my_vehicles", icon: Car },
-  { href: "/agent/post/vehicle", labelKey: "post_vehicle", icon: PlusCircle },
-  { href: "/agent/messages", labelKey: "messages", icon: MessageSquare },
-  { href: "/agent/notifications", labelKey: "notifications", icon: Bell },
-  { href: "/agent/payments", labelKey: "commission_history", icon: CreditCard },
-  { href: "/agent/settings", labelKey: "settings", icon: Settings },
+const adminNav = [
+  { href: "/admin", label: "Overview", icon: LayoutDashboard },
+  { href: "/admin/products", label: "Products", icon: ShoppingBag },
+  { href: "/admin/orders", label: "Orders", icon: Boxes },
+  { href: "/admin/production", label: "Production", icon: Scissors },
+  { href: "/admin/workers", label: "Workers", icon: Hammer },
+  { href: "/admin/machines", label: "Machines", icon: Truck },
+  { href: "/admin/inventory", label: "Inventory", icon: Boxes },
+  { href: "/admin/commissions", label: "Commissions", icon: CreditCard },
+  { href: "/admin/users", label: "Users", icon: Users },
+  { href: "/admin/settings", label: "Settings", icon: Settings },
 ]
 
-const adminNav = [
-  { href: "/admin", labelKey: "dashboard", icon: LayoutDashboard },
-  { href: "/admin/agents", labelKey: "agent_management", icon: User },
-  { href: "/admin/permissions", labelKey: "listing_permissions", icon: ShieldCheck },
-  { href: "/admin/properties", labelKey: "properties", icon: Building2 },
-  { href: "/admin/vehicles", labelKey: "vehicles", icon: Car },
-  { href: "/admin/users", labelKey: "users", icon: User },
-  { href: "/admin/messages", labelKey: "messages", icon: MessageSquare },
-  { href: "/admin/notifications", labelKey: "notifications", icon: Bell },
-  { href: "/admin/announcements", labelKey: "announcements", icon: Megaphone },
-  { href: "/admin/payments", labelKey: "payments", icon: CreditCard },
-  { href: "/admin/settings", labelKey: "settings", icon: Settings },
+const agentNav = [
+  { href: "/agent", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/agent/products", label: "My Products", icon: ShoppingBag },
+  { href: "/sell", label: "List Product", icon: Scissors },
+  { href: "/agent/orders", label: "Orders", icon: Boxes },
+  { href: "/agent/commissions", label: "Commissions", icon: CreditCard },
+  { href: "/agent/settings", label: "Settings", icon: Settings },
 ]
 
 interface SidebarProps {
@@ -62,49 +52,8 @@ interface SidebarProps {
 export function Sidebar({ role, isOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
-  const { logout, getToken } = useAuth()
-  const { t } = useI18n()
+  const { logout } = useAuth()
   const nav = role === "admin" ? adminNav : agentNav
-  const [unreadCount, setUnreadCount] = useState(0)
-  const [unreadMessages, setUnreadMessages] = useState(0)
-
-  const fetchUnread = async (
-    path: string,
-    setter: (n: number) => void,
-  ) => {
-    const token = await getToken()
-    if (!token) return
-    fetch(`${getApiUrl()}/api${path}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (typeof data.count === "number") setter(data.count)
-      })
-      .catch(() => {})
-  }
-
-  const fetchUnreadCount = useCallback(
-    () => fetchUnread("/notifications/count", setUnreadCount),
-    [getToken],
-  )
-
-  const fetchUnreadMessages = useCallback(
-    () => fetchUnread("/messages/unread", setUnreadMessages),
-    [getToken],
-  )
-
-  useEffect(() => {
-    fetchUnreadCount()
-    const interval = setInterval(fetchUnreadCount, 30000)
-    return () => clearInterval(interval)
-  }, [fetchUnreadCount])
-
-  useEffect(() => {
-    fetchUnreadMessages()
-    const interval = setInterval(fetchUnreadMessages, 30000)
-    return () => clearInterval(interval)
-  }, [fetchUnreadMessages])
 
   const isActive = useCallback(
     (path: string) => {
@@ -118,17 +67,15 @@ export function Sidebar({ role, isOpen = false, onClose }: SidebarProps) {
 
   const sidebarContent = (
     <aside className="flex h-full w-64 flex-col border-r border-slate-800 bg-slate-900 text-white">
-      {}
       <div className="flex items-center justify-between border-b border-slate-800 px-6 py-5">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500">
-            <Home className="h-4 w-4 text-white" />
+            <Scissors className="h-4 w-4 text-white" />
           </div>
           <span className="text-lg font-extrabold tracking-tight">
-            Dawo<span className="text-orange-400">life</span>
+            Hachalu<span className="text-orange-400">Protocol</span>
           </span>
         </div>
-        {}
         <button
           onClick={onClose}
           className="lg:hidden flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition"
@@ -138,25 +85,16 @@ export function Sidebar({ role, isOpen = false, onClose }: SidebarProps) {
         </button>
       </div>
 
-      {}
       <div className="px-6 py-3">
         <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-slate-400">
-          {role} {t('portal')}
+          {role} portal
         </span>
       </div>
 
-      {}
       <nav className="flex-1 overflow-y-auto px-3 py-2">
         {nav.map((item) => {
           const Icon = item.icon
           const active = isActive(item.href)
-          const showBadge = (item.href === "/agent/notifications" || item.href === "/admin/notifications") && unreadCount > 0
-          const showMessageBadge = (item.href === "/agent/messages" || item.href === "/admin/messages") && unreadMessages > 0
-          const badge = showBadge
-            ? unreadCount
-            : showMessageBadge
-              ? unreadMessages
-              : 0
           return (
             <Link
               key={item.href}
@@ -170,18 +108,12 @@ export function Sidebar({ role, isOpen = false, onClose }: SidebarProps) {
               )}
             >
               <Icon className="h-4 w-4 shrink-0" />
-              <span className="flex-1">{t(item.labelKey)}</span>
-              {badge > 0 && (
-                <span className="inline-flex items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white min-w-[18px]">
-                  {badge > 99 ? "99+" : badge}
-                </span>
-              )}
+              <span className="flex-1">{item.label}</span>
             </Link>
           )
         })}
       </nav>
 
-      {}
       <div className="border-t border-slate-800 p-4">
         <button
           onClick={() => {
@@ -191,7 +123,7 @@ export function Sidebar({ role, isOpen = false, onClose }: SidebarProps) {
           className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-400 transition hover:bg-red-900/30 hover:text-red-400"
         >
           <LogOut className="h-4 w-4" />
-          {t('sign_out')}
+          Sign out
         </button>
       </div>
     </aside>
@@ -199,13 +131,10 @@ export function Sidebar({ role, isOpen = false, onClose }: SidebarProps) {
 
   return (
     <>
-      {}
       <div className="hidden lg:flex lg:h-screen lg:w-64 lg:flex-shrink-0">
         {sidebarContent}
       </div>
 
-      {}
-      {}
       <div
         className={cn(
           "fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity duration-300 lg:hidden",
@@ -214,7 +143,6 @@ export function Sidebar({ role, isOpen = false, onClose }: SidebarProps) {
         onClick={onClose}
         aria-hidden="true"
       />
-      {}
       <div
         className={cn(
           "fixed inset-y-0 left-0 z-50 w-64 transition-transform duration-300 ease-in-out lg:hidden",
@@ -226,4 +154,3 @@ export function Sidebar({ role, isOpen = false, onClose }: SidebarProps) {
     </>
   )
 }
-

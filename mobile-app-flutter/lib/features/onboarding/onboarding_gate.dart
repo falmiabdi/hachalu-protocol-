@@ -31,7 +31,7 @@ class _OnboardingGateState extends State<OnboardingGate> {
   }
 
   Widget _roleHome() {
-    return const AppShell();
+    return const HachaluAppShell();
   }
 
   Future<void> _finish() async {

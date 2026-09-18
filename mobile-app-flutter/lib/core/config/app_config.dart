@@ -54,19 +54,18 @@ abstract final class AppConfig {
   
   
   static const Duration receiveTimeout = Duration(seconds: 60);
-
-  static const String authTokenKey = 'auth_token';
+static const String authTokenKey = 'auth_token';
   static const String cachedUserKey = 'auth_user';
-  static const String languageKey = 'dawolife_lang';
+  static const String languageKey = 'hachalu_lang';
 
   
   
-  static const String appName = 'DawoLife';
-  static const String appTagline = "Ethiopia's Digital Real Estate Marketplace";
-  static const String playStorePackageId = 'com.dawolife.mobile';
 
-  
-  static String webShareBaseUrl = 'https://dawolife.jebugeneraltrading.com';
+  static const String appName = 'Hachalu Protocol';
+  static const String appTagline = 'Ethiopian Garment Manufacturing & Custom Tailoring';
+  static const String playStorePackageId = 'com.hachalu.mobile';
+
+  static String webShareBaseUrl = 'https://hachalu.jebugeneraltrading.com';
 
   
   static String get playStoreUrl =>
