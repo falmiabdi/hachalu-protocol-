@@ -90,7 +90,7 @@ class ProductCard extends StatelessWidget {
                         scrollDirection: Axis.horizontal,
                         shrinkWrap: true,
                         itemCount: name.length > 4 ? 4 : name.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 4),
+                        separatorBuilder: (_, _) => const SizedBox(width: 4),
                         itemBuilder: (_, i) => _ColorDot(color: name[i]),
                       ),
                     ),

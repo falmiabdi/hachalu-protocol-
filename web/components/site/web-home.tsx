@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { Search, Sparkles, Scissors, Truck, ShieldCheck } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
@@ -35,6 +35,8 @@ export function WebHome() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [loading, setLoading] = useState(true)
+  const [heroVideoFailed, setHeroVideoFailed] = useState(false)
+  const heroVideoRef = useRef<HTMLVideoElement>(null)
 
   const load = async (category: string | null, term: string) => {
     setLoading(true)
@@ -61,6 +63,17 @@ export function WebHome() {
       .then(setCategories)
       .catch(() => {})
   }, [])
+
+  useEffect(() => {
+    const video = heroVideoRef.current
+    if (!video || heroVideoFailed) return
+    const attempt = video.play()
+    if (attempt) {
+      attempt.catch((err) => {
+        if (err?.name !== "AbortError") setHeroVideoFailed(true)
+      })
+    }
+  }, [heroVideoFailed])
 
   useEffect(() => {
     load(activeCategory, search)
@@ -119,32 +132,49 @@ export function WebHome() {
   return (
     <div className="min-h-screen bg-white">
       <SiteHeader />
-      <section className="relative overflow-hidden bg-gradient-to-b from-primary/10 via-background to-background">
-        <div className="mx-auto flex max-w-7xl flex-col items-start gap-6 px-4 py-14 sm:px-6 md:flex-row md:items-center md:justify-between md:py-20">
+      <section className="relative overflow-hidden bg-secondary">
+        {!heroVideoFailed && (
+          <video
+            ref={heroVideoRef}
+            src="/hero%20background%20video.mp4"
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            aria-hidden
+            onError={() => setHeroVideoFailed(true)}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        )}
+        <div className="absolute inset-0 bg-slate-950/25" />
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/80 via-slate-950/30 to-transparent" />
+
+        <div className="relative z-10 mx-auto flex max-w-7xl flex-col items-start gap-6 px-4 py-16 sm:px-6 md:flex-row md:items-center md:justify-between md:py-24">
           <div className="max-w-xl">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-semibold text-primary">
-              <Sparkles className="h-3.5 w-3.5" /> Ethiopian Tailoring, Modern Standards
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white/90 backdrop-blur-sm">
+              <Sparkles className="h-3.5 w-3.5 text-primary" /> Ethiopian Tailoring, Modern Standards
             </div>
-            <h1 className="text-3xl font-extrabold leading-tight tracking-tight text-secondary sm:text-4xl lg:text-5xl">
+            <h1 className="text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
               Hachalu <span className="text-primary">Protocol</span>
             </h1>
-            <p className="mt-3 text-base text-muted-foreground sm:text-lg">
+            <p className="mt-3 text-base text-white/85 sm:text-lg">
               Shop ready-made garments or commission bespoke custom tailoring — measured, tracked and
               delivered from our shop floor to your door.
             </p>
             <form
-              className="mt-6 flex max-w-md items-center gap-2 rounded-2xl border border-border bg-card p-1.5 shadow-sm"
+              className="mt-6 flex max-w-md items-center gap-2 rounded-2xl border border-white/20 bg-white/15 p-1.5 shadow-2xl backdrop-blur-xl"
               onSubmit={(e) => {
                 e.preventDefault()
                 load(activeCategory, search)
               }}
             >
-              <Search className="ml-2 h-4 w-4 text-muted-foreground" />
+              <Search className="ml-2 h-4 w-4 text-white/70" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search garments, fabric, style..."
-                className="h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                className="h-9 w-full bg-transparent text-sm text-white outline-none placeholder:text-white/60"
               />
               <button
                 type="submit"
@@ -161,10 +191,10 @@ export function WebHome() {
               { icon: ShieldCheck, title: "Quality Checked", desc: "Every piece inspected before delivery" },
               { icon: Sparkles, title: "Ready-Made", desc: "Curated garments available today" },
             ].map((f) => (
-              <div key={f.title} className="rounded-2xl border border-border bg-card p-4">
+              <div key={f.title} className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-md">
                 <f.icon className="h-5 w-5 text-primary" />
-                <p className="mt-2 text-sm font-semibold">{f.title}</p>
-                <p className="text-xs text-muted-foreground">{f.desc}</p>
+                <p className="mt-2 text-sm font-semibold text-white">{f.title}</p>
+                <p className="text-xs text-white/70">{f.desc}</p>
               </div>
             ))}
           </div>

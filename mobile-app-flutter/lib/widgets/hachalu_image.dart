@@ -49,12 +49,12 @@ class HachaluImage extends StatelessWidget {
           width: width,
           height: height,
           fit: fit,
-          placeholder: (_, __) => Container(
+          placeholder: (_, _) => Container(
             decoration: BoxDecoration(
               color: placeholderColor ?? Colors.grey.shade200,
             ),
           ),
-          errorWidget: (_, __, ___) => Container(
+          errorWidget: (_, _, _) => Container(
             color: placeholderColor ?? Colors.grey.shade200,
             alignment: Alignment.center,
             child: const Icon(Icons.image_not_supported_outlined,

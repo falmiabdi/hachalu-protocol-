@@ -33,7 +33,7 @@ import { startNotificationCleanup } from './routes/notifications.js'
 import { setupWebSocket } from './ws/server.js'
 import { errorHandler, notFoundHandler } from './middleware/error.js'
 import { isResendConfigured } from './services/email.js'
-import { isLocalStorage, ensureUploadDir, uploadDirPath } from './utils/storage.js'
+import { isLocalStorage, ensureUploadDir, uploadDirExists, uploadDirPath } from './utils/storage.js'
 
 dotenv.config()
 
@@ -43,7 +43,7 @@ const PORT = process.env.PORT || 4000
 
 
 ensureUploadDir()
-if (isLocalStorage()) {
+if (isLocalStorage() || uploadDirExists()) {
   app.use('/uploads', express.static(uploadDirPath()))
   console.log('📁 Serving uploaded files from disk at /uploads')
 }

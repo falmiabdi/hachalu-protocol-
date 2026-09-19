@@ -68,7 +68,7 @@ export async function uploadFile(opts: {
   if (isLocalStorage()) {
     return uploadLocal({ buffer: opts.buffer, mime: opts.mime, originalname: opts.originalname })
   }
-  return uploadCloudinary({ buffer: opts.buffer, mime: opts.mime, folder: opts.folder || 'delaharme' })
+  return uploadCloudinary({ buffer: opts.buffer, mime: opts.mime, folder: opts.folder || 'hachalu' })
 }
 
 

@@ -148,7 +148,7 @@ class _HachaluHomeScreenState extends State<HachaluHomeScreen> {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: _categories.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (_, i) {
           final c = _categories[i];
           return _CategoryChip(

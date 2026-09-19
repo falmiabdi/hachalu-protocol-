@@ -167,7 +167,7 @@ class HachaluRepository {
 
   Future<void> updateJobQc(String id, String qcStatus, {String? notes}) =>
       _api.patch('/api/production/jobs/$id/qc',
-          {'qcStatus': qcStatus, if (notes != null) 'notes': notes});
+          {'qcStatus': qcStatus, 'notes': ?notes});
 
   // ---------------------------------------------------------------------------
   // Inventory

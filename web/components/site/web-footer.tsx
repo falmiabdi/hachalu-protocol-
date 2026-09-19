@@ -63,20 +63,19 @@ function InstagramIcon({ className }: { className?: string }) {
 }
 
 const serviceLinks = [
-  { label: "Buy a House", href: "/#listings" },
-  { label: "Rent a House", href: "/#listings" },
-  { label: "Sell a Property", href: "/sell" },
-  { label: "Sell a Vehicle", href: "/sell" },
-  { label: "Post a Free Ad", href: "/sell" },
-  { label: "Agent Dashboard", href: "/auth/login" },
+  { label: "Shop Ready-Made", href: "/products" },
+  { label: "Custom Tailoring", href: "/products?custom=1" },
+  { label: "Sell on Hachalu", href: "/sell" },
+  { label: "Become a Seller", href: "/auth/signup" },
+  { label: "Seller Dashboard", href: "/agent" },
+  { label: "Track Order", href: "/orders" },
 ]
 
 const quickLinks = [
   { label: "Home", href: "/" },
-  { label: "Condominiums", href: "/#listings" },
-  { label: "Cars", href: "/#vehicles" },
-  { label: "Map View", href: "/#map" },
-  { label: "Our Services", href: "/#services" },
+  { label: "Shop", href: "/products" },
+  { label: "Custom Orders", href: "/products?custom=1" },
+  { label: "Cart", href: "/cart" },
   { label: "News", href: "/news" },
   { label: "Register", href: "/auth/signup" },
 ]
@@ -131,9 +130,10 @@ export function WebFooter() {
           <div>
             <Logo dark />
             <p className="mt-4 text-sm leading-relaxed text-secondary-foreground/70">
-              DawoLife is Ethiopia&apos;s trusted marketplace for real estate and
-              vehicles. We connect buyers, sellers, and agents with verified
-              listings and honest deals — from dream homes to dream rides.
+              Hachalu Protocol is Ethiopia&apos;s trusted marketplace for ready-made
+              garments and custom tailoring. We connect buyers, sellers, and master
+              tailors — from curated looks and quality fabrics to fully bespoke,
+              made-to-measure pieces.
             </p>
             {socials.length > 0 && (
               <div className="mt-5 flex gap-3">
@@ -213,7 +213,7 @@ export function WebFooter() {
 
       <div className="border-t border-white/10">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-5 text-xs text-secondary-foreground/50 sm:flex-row sm:px-6 lg:px-8">
-          <p>© {new Date().getFullYear()} DawoLife. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Hachalu Protocol. All rights reserved.</p>
           <div className="flex gap-5">
             <Link href="/" className="transition-colors hover:text-primary">
               Privacy Policy

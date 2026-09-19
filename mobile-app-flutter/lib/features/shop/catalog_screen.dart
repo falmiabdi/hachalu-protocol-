@@ -195,7 +195,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (_, i) {
           final entry = items[i];
           final selected = entry.$1 == _selectedCategoryId;
