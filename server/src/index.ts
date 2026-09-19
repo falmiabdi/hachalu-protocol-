@@ -34,6 +34,7 @@ import { setupWebSocket } from './ws/server.js'
 import { errorHandler, notFoundHandler } from './middleware/error.js'
 import { isResendConfigured } from './services/email.js'
 import { isLocalStorage, ensureUploadDir, uploadDirExists, uploadDirPath } from './utils/storage.js'
+import { signAccessToken, verifyAccessToken } from './utils/jwt.js'
 
 dotenv.config()
 
@@ -166,9 +167,32 @@ app.get(['/api/health', '/health'], async (_req, res) => {
   } catch {
     dbState = 'disconnected'
   }
+  const jwtSecret = process.env.JWT_SECRET || ''
+  const jwtRefreshSecret = process.env.JWT_REFRESH_SECRET || ''
+  const devDefaults = ['dev-insecure-secret-change-me', 'dev-insecure-refresh-secret-change-me']
+  const jwtConfigured =
+    !!jwtSecret &&
+    !!jwtRefreshSecret &&
+    !devDefaults.includes(jwtSecret) &&
+    !devDefaults.includes(jwtRefreshSecret)
+  let jwtVerify = false
+  if (jwtConfigured) {
+    try {
+      const t = signAccessToken({ userId: 'health-check', email: 'health@hachalu.internal', role: 'system' })
+      jwtVerify = verifyAccessToken(t).userId === 'health-check'
+    } catch {
+      jwtVerify = false
+    }
+  }
   res.status(dbState === 'connected' ? 200 : 503).json({
     status: dbState === 'connected' ? 'ok' : 'degraded',
     db: dbState,
+    jwt: {
+      configured: jwtConfigured,
+      secretSet: !!process.env.JWT_SECRET,
+      refreshSecretSet: !!process.env.JWT_REFRESH_SECRET,
+      verifyRoundTrip: jwtVerify,
+    },
     timestamp: new Date().toISOString(),
   })
 })

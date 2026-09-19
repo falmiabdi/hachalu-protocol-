@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Image from "next/image"
-import { Check, X, Loader2, PackageOpen } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Check, X, Loader2, PackageOpen, Plus } from "lucide-react"
 import {
   adminApproveProduct,
   adminRejectProduct,
@@ -29,6 +30,7 @@ const FILTERS = [
 ]
 
 export default function AdminProductsPage() {
+  const router = useRouter()
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState("")
@@ -99,6 +101,9 @@ export default function AdminProductsPage() {
           <p className="text-sm text-muted-foreground">Review listings, approve or reject.</p>
         </div>
         <div className="flex flex-wrap gap-1.5">
+<Button size="sm" className="mr-2" onClick={() => router.push("/admin/products/new")}>
+        <Plus className="mr-1 h-3.5 w-3.5" /> Add product
+      </Button>
           {FILTERS.map((f) => (
             <button
               key={f.value}
