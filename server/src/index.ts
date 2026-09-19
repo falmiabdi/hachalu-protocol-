@@ -76,10 +76,15 @@ const allowedOrigins = [
 
 const allowAllOrigins = process.env.ALLOW_ALL_ORIGINS === 'true'
 
-const isLocalhostOrigin = (origin: string) => {
+const isTrustedOrigin = (origin: string) => {
   try {
-    const { hostname } = new URL(origin)
-    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '10.0.2.2'
+    const hostname = new URL(origin).hostname
+    return (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '10.0.2.2' ||
+      hostname.endsWith('.vercel.app')
+    )
   } catch {
     return false
   }
@@ -87,7 +92,7 @@ const isLocalhostOrigin = (origin: string) => {
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (allowAllOrigins || !origin || allowedOrigins.includes(origin) || isLocalhostOrigin(origin)) {
+    if (allowAllOrigins || !origin || allowedOrigins.includes(origin) || isTrustedOrigin(origin)) {
       callback(null, true)
     } else {
       callback(new Error('Not allowed by CORS'))
