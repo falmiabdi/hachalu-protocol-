@@ -197,27 +197,6 @@ export function getApiUrl(): string {
     return cachedUrl
   }
 
-  const envApiUrl = process.env.NEXT_PUBLIC_API_URL
-  if (envApiUrl) {
-    cachedUrl = normalizeBaseUrl(envApiUrl)
-    return cachedUrl
-  }
-
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname
-    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      const port = window.location.port
-      if (port === '3000' || port === '') {
-        if (hostname.includes('jebugeneraltrading.com')) {
-          cachedUrl = 'https://api.jebugeneraltrading.com'
-          return cachedUrl
-        }
-        cachedUrl = `${window.location.protocol}//${hostname}:4000`
-        return cachedUrl
-      }
-    }
-  }
-
   cachedUrl = defaultApiUrl()
   return cachedUrl
 }
